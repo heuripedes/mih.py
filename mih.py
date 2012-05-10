@@ -1,17 +1,11 @@
 #!/usr/bin/env python2
+#vim: sts=4 ts=4 sw=4 et
 
 if __name__ == "__main__":
-	import miis
-	import mies
-	import mics
-	import mihf
+    from mihf import *
 
-	f = mihf.Mihf()
+    f = mihf.Mihf()
 
-	f.add_service(miis.Miis())
-	f.add_service(mies.Mies())
-	f.add_service(mics.Mics())
-
-	f.run()
+    f.run()
 
 
