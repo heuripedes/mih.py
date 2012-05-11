@@ -1,8 +1,10 @@
-#vim: sts=4 ts=4 sw=4 et
+# vim: sts=4 ts=8 sw=4 et
 
-import mihp
+import service
 
-class Mies(mihp.Service):
-    def __init__(self):
-        super(Mies, self).__init__(name='MIES')
+class Mies(service.Service):
+    def __init__(self, name):
+        """Constructor"""
+        super(Mies, self).__init__(name="mies")
+    
 

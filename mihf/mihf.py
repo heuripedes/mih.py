@@ -1,26 +1,27 @@
-#vim: sts=4 ts=4 sw=4 et
+# vim: sts=4 ts=8 sw=4 et
 
-import mics
-import mies
-import miis
+import util
 
-class Mihf(object):
-    def __init__(self):
-        super(Mihf, self).__init__()
-        
+class Mihf:
+    def __init__(self, addr="0.0.0.0", port="1234"):
+        """Constructor"""
         self._services = dict()
-   
-        services = [miis.Miis(), mies.Mies(), mics.Mics()]
-        self._miis, self._mies, self._mics = services
+        self._peers = []
+        self._addr  = addr
+        self._port  = port
 
-        for s in services:
-            self._add_service(s)
-        
-    def run(self):
-        """ Runs the MIHF. """
-        pass
+        self._id = util.gen_id("MIHF")
+
+    def add_service(self, service):
+        """Add a new service to this MIHF"""
+        service.set_mihf(self)
+        self._services[service.name] = service;
+
+    def add_peer(self, peer):
+        """Add a peer MIHF"""
+        self._peers.append(peer)
     
-    def _add_service(self, service):
-        """ Add a service to this MIHF. """
-        self._services[service.name] = service
+    def run(self):
+        """Run the MIHF"""
+        pass
 
