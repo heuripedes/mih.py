@@ -2,187 +2,53 @@
 
 import os
 import re
+import time
+import socket
+import select
+import resource
+
+from link import *
 
 def gen_id(name):
     """
-    Generates an identifier string.
-
-    The string is formatted as "NR", where N is the provided name and R is a
-    hex-encoded randomly generated 32bit number. N is strip()ed and the
-    entire string is converted to uppercase.
+    :return name+random hex number
     """
     
     return (name.strip() + str(os.urandom(4)).encode('hex_codec')).upper()
 
-class MihfEntity(object):
-    """
-    This class implements the core Media Independent Event Service features.
-    """
-
-    def __init__(self):
-        self._events = []
-        self._subscribers = dict()
-
-    def subscribe(self, event, receiver):
-        """Subscribe to the given event(s)"""
-
-        assert event in self._events
-
-        if not obj in self._subscribers[event]:
-            self._subscribers[event].append(receiver)
-
-    def _emit(self, event):
-        """Triggers an event"""
-        
-        assert event in self._events
-
-        for subscriber in self._subscribers[event]:
-            if not issubclass(subscriber, str):
-                method = getattr(subscriber, 'on_' + event)
-                method()
-            else:
-                # TODO: propagate the event remotely
-                pass
-
-    def _register_event(self, name):
-        """
-        Register a new event for this instance.
-
-        name -- the event's name or a list of event names.
-        """
-
-        if issubclass(name, list):
-            for n in name:
-                self._register_event(n)
-        else:
-            if not name in self._events:
-                self._events.append(name)
-                self._subscribers[name] = []
-
-class Link(object):
-    def __init__(self, ifname, mihf):
-        """Constructor"""
-        self._ifname = ifname
-        self._mihf   = mihf
-
-        self._setup_events()
-
-    def _setup_events(self):
-        mies = self._mihf.mies
-        mies.register_event('mih_link_down.indication')
-        mies.register_event('mih_link_up.indication')
-
-    def activate(self):
-        """Activates the interface"""
-        
-        # TODO: add generic interface activation here
-        #raise NotImplemented()
-
-        self._mihf.mies.emit('mih_link_up.indication')
-
-    def deactivate(self):
-        """Deactivates the interface"""
-
-        # TODO: add generic interface deactivation here
-        #raise NotImplemented()
-        
-        self._mihf.mies.emit('mih_link_down.indication')
-
-class Link80203(Link):
-    def __init__(self, ifname, mihf):
-        """Constructor"""
-        super(Link80203, self).__init__(ifname, mihf)
-
-class Link80211(Link):
-    def __init__(self, ifname, mihf):
-        """Constructor"""
-        super(Link80211, self).__init__(ifname, mihf)
-
-class Service(object):
-    def __init__(self, name):
-        """Constructor"""
-        self._name = name.strip().upper()
-        
-        print '- Initializing', self._name, 'service'
-
-# TODO: Find a way to handle remote subscriptions.
-class Mies(Service):
-    #REQUEST    = 1
-    #RESPONSE   = 2
-    #INDICATION = 3
-
-    def __init__(self, mihf):
-        """Constructor"""
-        super(Mies, self).__init__('MIES')
-
-        self._mihf = mihf
-        self._subscribers = dict()
-        self._handlers = dict()
-
-    def register_event(self, event):
-        """Registers an event"""
-
-        if not event in self._subscribers:
-            print '- Registering event', event
-            self._subscribers[event] = []
-
-    def register_handler(self, handler, name, mihf=None):
-        """Registers a handler"""
-        if not mihf:
-            mihf = self._mihf.id
-
-        handlerstr = mihf + '.' + name
-        self._handlers[handlerstr] = handler
-
-    def subscribe(self, event, mihf=None):
-        """Subscribe a MIHF to an event"""
-       
-        # mihf == None means local mihf
-        if not mihf:
-            mihf = self._mihf 
-        
-        pair = (handler, mihf)
-        
-        self._subscribers[event] = handler
-
-    def emit(self, event, data, mihf=None):
-        """Notifies the subscribers of the given event"""
-        for subscriber in self._subscribers[event]:
-            subscriber[0](data)
 
 class Mihf(object):
     def __init__(self):
-        """Constructor"""
-        
-        self._id = gen_id('MIHF-')
-       
-        print '- Initializing', self._id
+        self._init_mies()
 
-        self._init_services()
+        self._sock = None
+        self._peers = []
 
+    def __del__(self):
+        if self._sock:
+            self._sock.close()
+
+    def run(self):
         self._detect_local_links()
-      
-    @property
-    def id(self):
-        return self._id
+        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        #self._sock.bind((socket.gethostname(), 1234))
+        self._sock.bind(('localhost', 1234))
+        self._sock.listen(1)
+        self._sock.setblocking(0)
 
-    @property
-    def mies(self):
-        return self._mies
+        while 1:
+            readable, writable, erroring = select.select([self._sock], [], [], 300/1000.0)
 
-    @property
-    def mics(self):
-        return self._mics
-    
-    @property
-    def miis(self):
-        return self._miis
-    
-    def _init_services(self):
-        """Initialize the MIHF services"""
+            while readable:
+                peer = self._sock.accept()
+                print peer[1], 'sent:', peer[0].recv(resource.getpagesize())
 
-        self._mies = Mies(self)
+                readable, writable, erroring = select.select([self._sock], [], [], 10/1000.0)
 
+            for iface in self._ifaces:
+                iface.refresh()
+
+            #time.sleep(300/1000.0) # 300ms
 
     def _detect_local_links(self):
         """Reads and parses /proc/net/dev"""
@@ -208,12 +74,37 @@ class Mihf(object):
 
         print self._ifaces
 
+    # MIES --------------------------------------------------------------------
+    
+    def _init_mies(self):
+        self.subscribers = dict()
 
+    def subscribe(self, event, receiver):
+        if event in self.subscribers:
+            self.subscribers[event].append(receiver)
+        else:
+            self.subscribers[event] = [receiver]
+    
+    def emit(self, event, sender):
+        if not event in self.subscribers:
+            return
 
-def on_mih_link_down_indication(data):
-    print "link down!"
+        for subscriber in self.subscribers[event]:
+            if isinstance(subscriber, str):
+                print subscriber
+            else:
+                subscriber(event, sender.mihf, sender)
+
+    # MICS --------------------------------------------------------------------
+    
+    # MIIS --------------------------------------------------------------------
+
+def on_mih_event(event, mihf, sender):
+    print 'Event', event, 'triggered by', sender
 
 if __name__ == '__main__':
     f = Mihf()
-
+    f.subscribe('mih_link_up_indication', on_mih_event)
+    f.subscribe('mih_link_down_indication', on_mih_event)
+    f.run()
 
