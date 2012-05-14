@@ -2,20 +2,24 @@
 
 import os
 import re
-import time
+#import time
 import socket
 import pickle
+import select
+import resource
 
 from link import *
 
-import collections
+#import collections
+
 
 def gen_id(name):
     """
     :return name+random hex number
     """
-    
+
     return (name.strip() + '-' + str(os.urandom(4)).encode('hex_codec')).upper()
+
 
 class Message:
     def __init__(self, src, dest, service, operation, action, payload):
@@ -24,7 +28,7 @@ class Message:
         self.payload = payload
 
     def __str__(self):
-        return pickle.dumps(self) 
+        return pickle.dumps(self)
 
     @staticmethod
     def request(src, dest, service, action, payload):
@@ -38,52 +42,37 @@ class Message:
     def indication(src, dest, service, action, payload):
         return Message(str(src), str(dest), service, 'indication', action, payload)
 
+
 class Mihf(object):
+
+    HOST = 'localhost'
+    PORT = 1234
+
     def __init__(self):
         self._init_mies()
-
         self._sock = None
         self._peers = []
 
         self.name = gen_id('MIHF')
 
-    def __del__(self):
-        if self._sock:
-            self._sock.close()
-
     def __str__(self):
         return self.name
 
-    def run(self):
-        import select
-        import resource
+    def _make_socket(self, server=True):
 
-        self._detect_local_links()
-        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        #self._sock.bind((socket.gethostname(), 1234))
-        self._sock.bind(('localhost', 1234))
-        self._sock.listen(1)
-        self._sock.setblocking(0)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-        while 1:
-            readable, _, _ = select.select([self._sock], [], [], 300/1000.0)
+        if server:
+            sock.bind((HOST, PORT))
+            sock.listen(1)
 
-            while readable:
-                conn, addr = self._sock.accept()
+        sock.setblocking(0)
 
-                data = conn.recv(resource.getpagesize())
-                print data
-
-                readable, writable, erroring = select.select([self._sock], [], [], 10/1000.0)
-
-            for iface in self._ifaces:
-                iface.refresh()
-
-            #time.sleep(300/1000.0) # 300ms
+        return sock
 
     def _detect_local_links(self):
         """Reads and parses /proc/net/dev"""
-        
+
         ifnames = []
 
         with open('/proc/net/dev') as f:
@@ -94,7 +83,7 @@ class Mihf(object):
         ifnames.remove('lo') # discard loopback
 
         self._ifaces = []
-        
+
         print '- Detected interfaces:', ', '.join(ifnames)
 
         for ifname in ifnames:
@@ -112,8 +101,34 @@ class Mihf(object):
 
         #print self._ifaces
 
+    def _refresh_ifaces(self):
+        for iface in self._ifaces:
+                iface.refresh()
+        
+    def serve(self):
+        self._detect_local_links()
+
+        sock = self._make_socket(server=True)
+
+        while True:
+            acceptable, _, _ = select.select([sock], [], [], 300 / 1000.0)
+
+            while readable:
+                conn, addr = sock.accept()
+
+                data = conn.recv(resource.getpagesize())
+                print data
+
+                readable, writable, erroring = select.select([sock], [], [], 10 / 1000.0)
+
+            self._refresh_ifaces()
+
+        sock.close()
+
+            #time.sleep(300/1000.0) # 300ms
+
     # MIES --------------------------------------------------------------------
-    
+
     def _init_mies(self):
         self.subscribers = dict()
 
@@ -128,7 +143,7 @@ class Mihf(object):
             self.subscribers[event].append(receiver)
         else:
             self.subscribers[event] = [receiver]
-    
+
     def emit(self, event, sender):
         if not event in self.subscribers:
             return
@@ -140,7 +155,7 @@ class Mihf(object):
                 subscriber(event, sender.mihf, sender)
 
     # MICS --------------------------------------------------------------------
-    
+
     # MIIS --------------------------------------------------------------------
 
 def on_mih_event(event, mihf, sender):
@@ -153,5 +168,5 @@ if __name__ == '__main__':
 
 #    print str(f)
 #    print Message.indication(str(f), str(f), 'MIES', 'mih_link_up', 'eth0')
-    f.run()
+    f.serve()
 
