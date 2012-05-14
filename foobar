@@ -1,0 +1,7 @@
+
+Message
+	- source (None = local)
+	- destination (None = broadcast/multicast)
+	- service
+	- message *.(request|response|indication)
+
