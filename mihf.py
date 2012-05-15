@@ -63,8 +63,12 @@ class Mihf(object):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         if server:
-            sock.bind((HOST, PORT))
+            sock.bind(('0.0.0.0', self.PORT))
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, True)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
             sock.listen(1)
+        else:
+            sock.bind((self.HOST, self.PORT))
 
         sock.setblocking(0)
 
@@ -78,9 +82,9 @@ class Mihf(object):
         with open('/proc/net/dev') as f:
             for line in f:
                 if line.count('|') < 1:
-                    ifnames.append(line.strip().split(':')[0])
-
-        ifnames.remove('lo') # discard loopback
+                    ifname = line.strip().split(':')[0]
+                    if not ifname == 'lo':
+                        ifnames.append(ifname)
 
         self._ifaces = []
 
@@ -98,12 +102,7 @@ class Mihf(object):
                 iface.on_link_down = self.on_link_down
                 self._ifaces.append(iface)
 
-
-        #print self._ifaces
-
-    def _refresh_ifaces(self):
-        for iface in self._ifaces:
-                iface.refresh()
+        print self._ifaces[0]
         
     def serve(self):
         self._detect_local_links()
@@ -113,19 +112,26 @@ class Mihf(object):
         while True:
             acceptable, _, _ = select.select([sock], [], [], 300 / 1000.0)
 
-            while readable:
+            while acceptable:
                 conn, addr = sock.accept()
 
                 data = conn.recv(resource.getpagesize())
                 print data
 
-                readable, writable, erroring = select.select([sock], [], [], 10 / 1000.0)
+                acceptable, _, _ = select.select([sock], [], [], 10 / 1000.0)
 
-            self._refresh_ifaces()
+            for iface in self._ifaces:
+                iface.refresh()
 
         sock.close()
 
-            #time.sleep(300/1000.0) # 300ms
+    def run(self):
+        self._detect_local_links()
+
+        sock = self._make_socket(server=False)
+
+        while True:
+            pass
 
     # MIES --------------------------------------------------------------------
 

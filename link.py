@@ -3,28 +3,36 @@
 import re
 
 class Link(object):
-    # from Documentation/networking/operstates.txt
-
     def __init__(self, ifname):
-        self._ifname = ifname
+        self.ifname = ifname
 
-        self._state = 'unknown'
+        self.state = 'unknown'
 
+        self.wireless = False
+        self.strenght = 0
+        self.carrier  = False
+
+        # callbacks
         self.on_link_up = None
         self.on_link_down = None
+        
 
-    @property
-    def ifname(self):
-        return self._ifname
+        with open('/sys/class/net/'+self.ifname+'/address') as f:
+            self.address = f.readline().strip()
+
+    def __str__(self):
+        return '<%s : %s %s>' \
+                % (self.__class__.__name__, self.ifname, self.address)
+
 
     def refresh(self):
-        operstate = self._state
+        operstate = self.state
 
-        with open('/sys/class/net/'+self._ifname+'/operstate') as f:
+        with open('/sys/class/net/'+self.ifname+'/operstate') as f:
             operstate = f.readline().strip()
 
-        if operstate != self._state:
-            self._state = operstate
+        if operstate != self.state:
+            self.state = operstate
             if operstate == 'up' and self.on_link_up:
                 self.on_link_up(self)
 
@@ -36,7 +44,17 @@ class Link80203(Link):
     def __init__(self, ifname):
         super(Link80203, self).__init__(ifname)
 
+    def refresh(self):
+        with open('/sys/class/net/'+self.ifname+'/carrier') as f:
+            self.carrier = f.readline().strip() == '1'
+
+        super(Link80203, self).refresh()
+
 class Link80211(Link):
     def __init__(self, ifname):
         super(Link80211, self).__init__(ifname)
+
+        self.wireless = True
+    
+
 
