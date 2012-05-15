@@ -10,7 +10,7 @@ import resource
 
 from link import *
 
-#import collections
+import collections
 
 
 def gen_id(name):
@@ -42,6 +42,7 @@ class Message:
     def indication(src, dest, service, action, payload):
         return Message(str(src), str(dest), service, 'indication', action, payload)
 
+Peer = collections.namedtuple('Peer', 'name, sock, addr')
 
 class Mihf(object):
 
@@ -52,6 +53,11 @@ class Mihf(object):
         self._init_mies()
         self._sock = None
         self._peers = []
+        self._server = False
+
+        # TODO: finish in/out queue implementation
+        self._iqueue = [] # incoming
+        self._oqueue = [] # outcoming
 
         self.name = gen_id('MIHF')
 
@@ -62,13 +68,13 @@ class Mihf(object):
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-        if server:
-            sock.bind(('0.0.0.0', self.PORT))
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, True)
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
-            sock.listen(1)
-        else:
-            sock.bind((self.HOST, self.PORT))
+        #if server:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, True)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
+        sock.bind(('0.0.0.0', self.PORT))
+        sock.listen(1)
+        #else:
+        #sock.bind((self.HOST, self.PORT))
 
         sock.setblocking(0)
 
@@ -103,26 +109,73 @@ class Mihf(object):
                 self._ifaces.append(iface)
 
         print self._ifaces[0]
+
+    def _check_peers(self, sock):
+
+        # TODO: improve self._peers (id -> address mapping and stuff)
+
+        # check for new peers
+        acceptable, _, _ = select.select([sock], [], [], 300 / 1000.0)
+
+        while acceptable:
+            self._peers.append(sock.accept()[0])
+            acceptable, _, _ = select.select([sock], [], [], 10 / 1000.0)
+
+
+    def _sync(self, sock):
+        """Receive and/or send queued messages"""
+
+        if not self._peers:
+            #print "- Flushing message queues."
+            pass
+
+        rlist, wlist, xlist = select.select(self._peers, self._peers, self._peers, 100 / 1000.0)
+
+        # receive messages
+        for psock in rlist:
+            # TODO: use recvfrom and refresh self._peers
+            data = psock.recv(resource.getpagesize())
+
+            if not data:
+                self._peers.remove(psock)
+
+                if psock in wlist:
+                    wlist.remove(psock)
+            else:
+                self._iqueue.append(data)
+                print data
+
+        # send messages
+        if self._oqueue:
+            for psock in wlist:
+                pass
+    
+    def _send(self, what):
+        self._oqueue.append(what)
+
+    def _recv(self):
+        if self._iqueue:
+            return self._iqueue.pop()
+        else:
+            return None
+
         
     def serve(self):
         self._detect_local_links()
 
         sock = self._make_socket(server=True)
 
+        self._server = True
+
         while True:
-            acceptable, _, _ = select.select([sock], [], [], 300 / 1000.0)
 
-            while acceptable:
-                conn, addr = sock.accept()
-
-                data = conn.recv(resource.getpagesize())
-                print data
-
-                acceptable, _, _ = select.select([sock], [], [], 10 / 1000.0)
+            self._check_peers(sock)
+            self._sync(sock)
 
             for iface in self._ifaces:
                 iface.refresh()
 
+        sock.shutdown()
         sock.close()
 
     def run(self):
