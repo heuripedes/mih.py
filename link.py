@@ -55,6 +55,10 @@ class Link80211(Link):
         super(Link80211, self).__init__(ifname)
 
         self.wireless = True
-    
+   
+   def refresh(self):
+       #'/sys/class/net/'+self.ifname+'/wireless/'
+
+       super(Link80211, self).refresh()
 
 

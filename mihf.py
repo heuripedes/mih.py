@@ -52,6 +52,8 @@ class Mihf(object):
     def __init__(self):
         self._init_mies()
         self._sock = None
+
+        # TODO: self._peers must be a dict (id -> { sock, addr })
         self._peers = []
         self._server = False
 
@@ -112,7 +114,6 @@ class Mihf(object):
 
     def _check_peers(self, sock):
 
-        # TODO: improve self._peers (id -> address mapping and stuff)
 
         # check for new peers
         acceptable, _, _ = select.select([sock], [], [], 300 / 1000.0)
