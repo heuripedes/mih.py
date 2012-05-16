@@ -2,11 +2,13 @@
 
 import os
 import re
+import sys
 #import time
 import socket
 import pickle
 import select
 import resource
+import argparse
 
 from link import *
 
@@ -54,7 +56,7 @@ class Mihf(object):
         self._sock = None
 
         # TODO: self._peers must be a dict (id -> { sock, addr })
-        self._peers = []
+        self._peers = dict()
         self._server = False
 
         # TODO: finish in/out queue implementation
@@ -112,44 +114,76 @@ class Mihf(object):
 
         print self._ifaces[0]
 
+    def _add_peer(self, peer):
+        """
+        Add a new peer. *peer* must be an instance of the Peer named tuple.
+        """ 
+
+        self._peers[peer.name] = peer
+
+    def _remove_peer(self, peer):
+        """
+        Remove a peer. *peer* can either be the name of the peer, its socket 
+        or an instance of the Peer named tuple.
+        """
+
+        if isinstance(peer, str):
+            del self._peers[name]
+        elif isinstance(peer, socket):
+            for key, p in self._peers[name]:
+                if p.sock == peer:
+                    self._peers[key]
+                    return
+        else:
+            del self._peers[peer.name]
+
     def _check_peers(self, sock):
 
+        assert self._server
 
         # check for new peers
         acceptable, _, _ = select.select([sock], [], [], 300 / 1000.0)
 
         while acceptable:
-            self._peers.append(sock.accept()[0])
-            acceptable, _, _ = select.select([sock], [], [], 10 / 1000.0)
 
+            #self._peers.append(sock.accept()[0])
+            client, addr = sock.accept()
+            msg = pickle.loads(client.recv(resource.getpagesize()))
+            peer = Peer(msg.src, client, addr)
+
+            self._add_peer(peer)
+
+            print "- New peer: ", peer
+
+            acceptable, _, _ = select.select([sock], [], [], 10 / 1000.0)
 
     def _sync(self, sock):
         """Receive and/or send queued messages"""
 
-        if not self._peers:
-            #print "- Flushing message queues."
-            pass
+        assert self._peers and self._oqueue, \
+                "Output queue is filled but there's no one do flush it to."
 
-        rlist, wlist, xlist = select.select(self._peers, self._peers, self._peers, 100 / 1000.0)
+        # TODO: update this code. should queues really be used?
+        # rlist, wlist, xlist = select.select(self._peers, self._peers, self._peers, 100 / 1000.0)
 
-        # receive messages
-        for psock in rlist:
-            # TODO: use recvfrom and refresh self._peers
-            data = psock.recv(resource.getpagesize())
+        # # receive messages
+        # for psock in rlist:
+        #     # TODO: use recvfrom and refresh self._peers
+        #     data = psock.recv(resource.getpagesize())
 
-            if not data:
-                self._peers.remove(psock)
+        #     if not data:
+        #         self._peers.remove(psock)
 
-                if psock in wlist:
-                    wlist.remove(psock)
-            else:
-                self._iqueue.append(data)
-                print data
+        #         if psock in wlist:
+        #             wlist.remove(psock)
+        #     else:
+        #         self._iqueue.append(data)
+        #         print data
 
-        # send messages
-        if self._oqueue:
-            for psock in wlist:
-                pass
+        # # send messages
+        # if self._oqueue:
+        #     for psock in wlist:
+        #         pass
     
     def _send(self, what):
         self._oqueue.append(what)
@@ -162,11 +196,12 @@ class Mihf(object):
 
         
     def serve(self):
+        self._server = True
+
         self._detect_local_links()
 
         sock = self._make_socket(server=True)
 
-        self._server = True
 
         while True:
 
@@ -183,9 +218,16 @@ class Mihf(object):
         self._detect_local_links()
 
         sock = self._make_socket(server=False)
-
+        
         while True:
-            pass
+
+            self._sync(sock)
+
+            for iface in self._ifaces:
+                iface.refresh()
+
+        sock.shutdown()
+        sock.close()
 
     # MIES --------------------------------------------------------------------
 
@@ -221,12 +263,39 @@ class Mihf(object):
 def on_mih_event(event, mihf, sender):
     print 'Event', event, 'triggered by', sender
 
-if __name__ == '__main__':
+
+def parse_args(argv):
+
+    if argv is None:
+        argv = sys.argv[1:]
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('-s', '--server',
+            action='store_true', help='Run as MIH server')
+
+    return parser.parse_args(argv)
+
+def main(argv=None):
+
+    args = parse_args(argv)
+
+    print args
+
     f = Mihf()
     f.subscribe('mih_link_up_indication', on_mih_event)
     f.subscribe('mih_link_down_indication', on_mih_event)
 
 #    print str(f)
 #    print Message.indication(str(f), str(f), 'MIES', 'mih_link_up', 'eth0')
-    f.serve()
+#
+    if args.server:
+        f.serve()
+    else:
+        f.run()
+
+    return 0
+
+if __name__ == '__main__':
+    sys.exit(main())
 

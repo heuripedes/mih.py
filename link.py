@@ -9,13 +9,12 @@ class Link(object):
         self.state = 'unknown'
 
         self.wireless = False
-        self.strenght = 0
         self.carrier  = False
+        self.strenght = 0
 
         # callbacks
         self.on_link_up = None
         self.on_link_down = None
-        
 
         with open('/sys/class/net/'+self.ifname+'/address') as f:
             self.address = f.readline().strip()
@@ -23,7 +22,6 @@ class Link(object):
     def __str__(self):
         return '<%s : %s %s>' \
                 % (self.__class__.__name__, self.ifname, self.address)
-
 
     def refresh(self):
         operstate = self.state
@@ -56,9 +54,7 @@ class Link80211(Link):
 
         self.wireless = True
    
-   def refresh(self):
-       #'/sys/class/net/'+self.ifname+'/wireless/'
-
-       super(Link80211, self).refresh()
-
+    def refresh(self):
+        #'/sys/class/net/'+self.ifname+'/wireless/'
+        super(Link80211, self).refresh()
 
