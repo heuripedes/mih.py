@@ -5,7 +5,7 @@ import re
 import sys
 #import time
 import socket
-import pickle
+import cPickle
 import select
 import resource
 import argparse
@@ -13,6 +13,8 @@ import argparse
 from link import *
 
 import collections
+
+PAGE_SIZE = resource.getpagesize()
 
 
 def gen_id(name):
@@ -30,7 +32,7 @@ class Message:
         self.payload = payload
 
     def __str__(self):
-        return pickle.dumps(self)
+        return cPickle.dumps(self)
 
     @staticmethod
     def request(src, dest, service, action, payload):
@@ -55,11 +57,9 @@ class Mihf(object):
         self._init_mies()
         self._sock = None
 
-        # TODO: self._peers must be a dict (id -> { sock, addr })
         self._peers = dict()
         self._server = False
 
-        # TODO: finish in/out queue implementation
         self._iqueue = [] # incoming
         self._oqueue = [] # outcoming
 
@@ -72,13 +72,14 @@ class Mihf(object):
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-        #if server:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, True)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
-        sock.bind(('0.0.0.0', self.PORT))
-        sock.listen(1)
-        #else:
-        #sock.bind((self.HOST, self.PORT))
+        if server:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, True)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
+            sock.bind(('0.0.0.0', self.PORT))
+            sock.listen(1)
+        else:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
+            sock.bind((self.HOST, self.PORT))
 
         sock.setblocking(0)
 
@@ -145,11 +146,14 @@ class Mihf(object):
         acceptable, _, _ = select.select([sock], [], [], 300 / 1000.0)
 
         while acceptable:
-
-            #self._peers.append(sock.accept()[0])
             client, addr = sock.accept()
-            msg = pickle.loads(client.recv(resource.getpagesize()))
+            data = client.recv(PAGE_SIZE)
+
+            msg = cPickle.loads(data)
+
             peer = Peer(msg.src, client, addr)
+
+            client.setblocking(False)
 
             self._add_peer(peer)
 
@@ -160,31 +164,40 @@ class Mihf(object):
     def _sync(self, sock):
         """Receive and/or send queued messages"""
 
-        assert self._peers and self._oqueue, \
-                "Output queue is filled but there's no one do flush it to."
+        if not self._peers:
+            # flush oqueue
+            return
 
-        # TODO: update this code. should queues really be used?
-        # rlist, wlist, xlist = select.select(self._peers, self._peers, self._peers, 100 / 1000.0)
+        # NOTE: recv() and send() might not receive/send all the data
 
-        # # receive messages
-        # for psock in rlist:
-        #     # TODO: use recvfrom and refresh self._peers
-        #     data = psock.recv(resource.getpagesize())
+        for key, peer in self._peers:
+            try:
+                data = peer.sock.recv(PAGE_SIZE)
 
-        #     if not data:
-        #         self._peers.remove(psock)
+                print data
 
-        #         if psock in wlist:
-        #             wlist.remove(psock)
-        #     else:
-        #         self._iqueue.append(data)
-        #         print data
+                if data:
+                    self._iqueue.append(cPickle.loads(data))
 
-        # # send messages
-        # if self._oqueue:
-        #     for psock in wlist:
-        #         pass
-    
+            except socket.error, msg:
+                print msg
+        
+        if self._oqueue:
+            for msg in self._oqueue:
+                
+                if not msg.dest in self._peers:
+                    print "- Peer not found:", msg.dest
+                    self._oqueue.remove(msg)
+                    continue
+
+                data = msg.ljust(PAGE_SIZE, '\x00')
+               
+                try:
+                    peer = self._peers[msg.dest]
+                    peer.sock.send(data)
+                except socket.error, msg:
+                    print msg
+
     def _send(self, what):
         self._oqueue.append(what)
 
@@ -285,6 +298,8 @@ def main(argv=None):
     f = Mihf()
     f.subscribe('mih_link_up_indication', on_mih_event)
     f.subscribe('mih_link_down_indication', on_mih_event)
+
+
 
 #    print str(f)
 #    print Message.indication(str(f), str(f), 'MIES', 'mih_link_up', 'eth0')
