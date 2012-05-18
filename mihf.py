@@ -10,6 +10,7 @@ import select
 import resource
 import argparse
 
+from message import *
 from link import *
 
 import collections
@@ -23,28 +24,6 @@ def gen_id(name):
     """
 
     return (name.strip() + '-' + str(os.urandom(4)).encode('hex_codec')).upper()
-
-
-class Message:
-    def __init__(self, src, dest, service, operation, action, payload):
-        self.src, self.dest = src, dest
-        self.service, self.operation, self.action = service, operation, action
-        self.payload = payload
-
-    def __str__(self):
-        return cPickle.dumps(self)
-
-    @staticmethod
-    def request(src, dest, service, action, payload):
-        return Message(str(src), str(dest), service, 'request', action, payload)
-
-    @staticmethod
-    def response(src, dest, service, action, payload):
-        return Message(str(src), str(dest), service, 'response', action, payload)
-
-    @staticmethod
-    def indication(src, dest, service, action, payload):
-        return Message(str(src), str(dest), service, 'indication', action, payload)
 
 Peer = collections.namedtuple('Peer', 'name, sock, addr')
 
@@ -99,7 +78,7 @@ class Mihf(object):
 
         self._ifaces = []
 
-        print '- Detected interfaces:', ', '.join(ifnames)
+        #print '- Detected interfaces:', ', '.join(ifnames)
 
         for ifname in ifnames:
             iface = None
@@ -113,7 +92,7 @@ class Mihf(object):
                 iface.on_link_down = self.on_link_down
                 self._ifaces.append(iface)
 
-        print self._ifaces[0]
+        print '- Detected ifaces:', self._ifaces
 
     def _add_peer(self, peer):
         """
@@ -293,7 +272,7 @@ def main(argv=None):
 
     args = parse_args(argv)
 
-    print args
+#    print args
 
     f = Mihf()
     f.subscribe('mih_link_up_indication', on_mih_event)
