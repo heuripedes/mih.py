@@ -51,14 +51,14 @@ class Mihf(object):
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-        if server:
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, True)
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
-            sock.bind(('0.0.0.0', self.PORT))
-            sock.listen(1)
-        else:
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
-            sock.bind((self.HOST, self.PORT))
+        #if server:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, True)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
+        sock.bind(('0.0.0.0', self.PORT))
+        sock.listen(1)
+        #else:
+        #    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
+        #    sock.bind((self.HOST, self.PORT))
 
         sock.setblocking(0)
 
@@ -140,6 +140,19 @@ class Mihf(object):
 
             acceptable, _, _ = select.select([sock], [], [], 10 / 1000.0)
 
+    def _discover(self, sock):
+        if not self._ifaces:
+            print 'No interfaces detected.'
+            sys.exit(-1)
+
+        for iface in self._ifaces:
+            if iface.state == 'up' and self.carrier:
+                sock.setsockopt(socket.SOL_SOCKET, 25, iface.ifname) # 25 = SO_BINDTODEVICE
+                msg = Message.request(self.name, None, None, 'MIH_Discovery', None)
+                self._send(msg)
+
+        sock.setsockopt(socket.SOL_SOCKET, 25, '') # 25 = SO_BINDTODEVICE
+
     def _sync(self, sock):
         """Receive and/or send queued messages"""
 
@@ -178,7 +191,8 @@ class Mihf(object):
                     print msg
 
     def _send(self, what):
-        self._oqueue.append(what)
+        sock.send(what)
+        #self._oqueue.append(what)
 
     def _recv(self):
         if self._iqueue:
@@ -198,6 +212,7 @@ class Mihf(object):
         while True:
 
             self._check_peers(sock)
+
             self._sync(sock)
 
             for iface in self._ifaces:
@@ -207,10 +222,11 @@ class Mihf(object):
         sock.close()
 
     def run(self):
-        self._detect_local_links()
 
         sock = self._make_socket(server=False)
         
+        self._detect_local_links()
+
         while True:
 
             self._sync(sock)
