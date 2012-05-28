@@ -2,6 +2,47 @@
 
 import re
 
+def make_link(ifname):
+    iface = None
+
+    if re.match('^eth', ifname):
+        iface = Link80203(ifname)
+    elif re.match('^wlan', ifname):
+        iface = Link80211(ifname)
+
+    return iface
+
+
+def detect_local_links():
+    """
+    Looks for links in /proc/net/dev
+    """
+
+    ifnames = []
+
+    with open('/proc/net/dev') as f:
+        for line in f:
+            if line.count('|') < 1:
+                ifname = line.strip().split(':')[0]
+                if not ifname == 'lo':
+                    ifnames.append(ifname)
+
+    links = []
+
+    #print '- Detected interfaces:', ', '.join(ifnames)
+
+    for ifname in ifnames:
+        iface = make_link(ifname)
+
+        if iface:
+            #iface.on_link_up = self.on_link_up
+            #iface.on_link_down = self.on_link_down
+            #links.append(iface)
+            links[ifname] = iface
+
+
+    return links
+
 class Link(object):
     def __init__(self, ifname):
         self.ifname = ifname

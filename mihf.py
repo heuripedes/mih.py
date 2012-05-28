@@ -36,70 +36,64 @@ class Mihf(object):
         self._init_mies()
         self._sock = None
 
-        self._peers = dict()
-        self._server = False
 
         self._iqueue = [] # incoming
         self._oqueue = [] # outcoming
 
-        self.name = gen_id('MIHF')
+        self.name   = gen_id('MIHF')
+        self.peers  = []
+        self.links  = []
+        self.server = False
 
     def __str__(self):
         return self.name
+
+    # MICS / MIIS
+    
+    def discover(self):
+        """
+        Discovers server MIHFs in the active networks.
+        """
+        pass
+
+    def report(self):
+        """
+        Returns information about a MIHF.
+        """
+        pass
+    
+    def switch(self, link):
+        """
+        Switch to another link.
+        """
+        pass
 
     def _make_socket(self, server=True):
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-        #if server:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, True)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
-        sock.bind(('0.0.0.0', self.PORT))
-        sock.listen(1)
+        if server:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, True)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
+            sock.bind(('0.0.0.0', self.PORT))
+            sock.listen(1)
         #else:
-        #    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
-        #    sock.bind((self.HOST, self.PORT))
+            #sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
+            #sock.bind((self.HOST, self.PORT))
 
         sock.setblocking(0)
 
         return sock
 
-    def _detect_local_links(self):
-        """Reads and parses /proc/net/dev"""
 
-        ifnames = []
 
-        with open('/proc/net/dev') as f:
-            for line in f:
-                if line.count('|') < 1:
-                    ifname = line.strip().split(':')[0]
-                    if not ifname == 'lo':
-                        ifnames.append(ifname)
-
-        self._ifaces = []
-
-        #print '- Detected interfaces:', ', '.join(ifnames)
-
-        for ifname in ifnames:
-            iface = None
-            if re.match('^eth', ifname):
-                iface = Link80203(ifname)
-            elif re.match('^wlan', ifname):
-                iface = Link80211(ifname)
-
-            if iface:
-                iface.on_link_up = self.on_link_up
-                iface.on_link_down = self.on_link_down
-                self._ifaces.append(iface)
-
-        print '- Detected ifaces:', self._ifaces
 
     def _add_peer(self, peer):
         """
         Add a new peer. *peer* must be an instance of the Peer named tuple.
         """ 
 
-        self._peers[peer.name] = peer
+        self.peers[peer.name] = peer
 
     def _remove_peer(self, peer):
         """
@@ -108,14 +102,14 @@ class Mihf(object):
         """
 
         if isinstance(peer, str):
-            del self._peers[name]
+            del self.peers[name]
         elif isinstance(peer, socket):
-            for key, p in self._peers[name]:
+            for key, p in self.peers[name]:
                 if p.sock == peer:
-                    self._peers[key]
+                    self.peers[key]
                     return
         else:
-            del self._peers[peer.name]
+            del self.peers[peer.name]
 
     def _check_peers(self, sock):
 
@@ -141,11 +135,11 @@ class Mihf(object):
             acceptable, _, _ = select.select([sock], [], [], 10 / 1000.0)
 
     def _discover(self, sock):
-        if not self._ifaces:
+        if not self.links:
             print 'No interfaces detected.'
             sys.exit(-1)
 
-        for iface in self._ifaces:
+        for iface in self.links:
             if iface.state == 'up' and self.carrier:
                 sock.setsockopt(socket.SOL_SOCKET, 25, iface.ifname) # 25 = SO_BINDTODEVICE
                 msg = Message.request(self.name, None, None, 'MIH_Discovery', None)
@@ -153,16 +147,16 @@ class Mihf(object):
 
         sock.setsockopt(socket.SOL_SOCKET, 25, '') # 25 = SO_BINDTODEVICE
 
-    def _sync(self, sock):
+    def _synchronize(self, sock):
         """Receive and/or send queued messages"""
 
-        if not self._peers:
+        if not self.peers:
             # flush oqueue
             return
 
         # NOTE: recv() and send() might not receive/send all the data
 
-        for key, peer in self._peers:
+        for key, peer in self.peers:
             try:
                 data = peer.sock.recv(PAGE_SIZE)
 
@@ -177,7 +171,7 @@ class Mihf(object):
         if self._oqueue:
             for msg in self._oqueue:
                 
-                if not msg.dest in self._peers:
+                if not msg.dest in self.peers:
                     print "- Peer not found:", msg.dest
                     self._oqueue.remove(msg)
                     continue
@@ -185,7 +179,7 @@ class Mihf(object):
                 data = msg.ljust(PAGE_SIZE, '\x00')
                
                 try:
-                    peer = self._peers[msg.dest]
+                    peer = self.peers[msg.dest]
                     peer.sock.send(data)
                 except socket.error, msg:
                     print msg
@@ -200,39 +194,55 @@ class Mihf(object):
         else:
             return None
 
-        
+    def _refresh_links(self):
+        links = detect_local_links()
+
+        # detect new links
+        for key, value in links:
+            if not key in self.links:
+                # TODO: send link up events
+                self.links[key] = value
+
+        # remove dead links
+        for key, value in self.links:
+            if not key in links:
+                # TODO: send link down events
+                del self.links[key]
+       
+        # refresh everything
+        for key, link in self.links:
+            self.links[key].refresh()
+
     def serve(self):
         self._server = True
 
-        self._detect_local_links()
-
-        sock = self._make_socket(server=True)
-
-
-        while True:
-
-            self._check_peers(sock)
-
-            self._sync(sock)
-
-            for iface in self._ifaces:
-                iface.refresh()
-
-        sock.shutdown()
-        sock.close()
+        self.run()
 
     def run(self):
 
-        sock = self._make_socket(server=False)
+        sock = self._make_socket(self._server)
         
-        self._detect_local_links()
 
         while True:
 
-            self._sync(sock)
+            self._refresh_links()
 
-            for iface in self._ifaces:
-                iface.refresh()
+            for key, peer in self.peers:
+                try:
+                    data = peer.sock.recv(PAGE_SIZE)
+
+                    print data
+
+                    if data:
+                        self._iqueue.append(cPickle.loads(data))
+
+                except socket.error, msg:
+                    print msg
+                data = peer
+            self._synchronize(sock)
+
+            for link in self.links:
+                link.refresh()
 
         sock.shutdown()
         sock.close()
