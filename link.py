@@ -1,6 +1,7 @@
 # vim: ts=8 sts=4 sw=4 et
 
 import re
+import collections
 
 def make_link(ifname):
     iface = None
@@ -27,7 +28,7 @@ def detect_local_links():
                 if not ifname == 'lo':
                     ifnames.append(ifname)
 
-    links = []
+    links = dict()
 
     #print '- Detected interfaces:', ', '.join(ifnames)
 
@@ -39,7 +40,6 @@ def detect_local_links():
             #iface.on_link_down = self.on_link_down
             #links.append(iface)
             links[ifname] = iface
-
 
     return links
 
@@ -56,6 +56,7 @@ class Link(object):
         # callbacks
         self.on_link_up = None
         self.on_link_down = None
+        self.on_link_going_down = None
 
         with open('/sys/class/net/'+self.ifname+'/address') as f:
             self.address = f.readline().strip()
@@ -90,12 +91,25 @@ class Link80203(Link):
         super(Link80203, self).refresh()
 
 class Link80211(Link):
+    THRESHOLD = 30
     def __init__(self, ifname):
         super(Link80211, self).__init__(ifname)
 
         self.wireless = True
+        self.quality  = 0
+
+        self.qualities = collections.deque(maxlen=10)
    
     def refresh(self):
-        #'/sys/class/net/'+self.ifname+'/wireless/'
         super(Link80211, self).refresh()
+        
+        if not self.state == 'up':
+            self.quality = 0
+            self.qualities.clear()
+            return
+        
+        with open('/sys/class/net/'+self.ifname+'/wireless/link') as f:
+            self.quality = f.readline().strip()
+            self.qualities.append(self.quality)
 
+        
