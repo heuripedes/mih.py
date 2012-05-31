@@ -3,7 +3,7 @@
 import os
 import re
 import sys
-#import time
+import time
 import socket
 import cPickle
 import select
@@ -33,16 +33,9 @@ class Mihf(object):
     PORT = 1234
 
     def __init__(self):
-        self._init_mies()
-        self._sock = None
-
-
-        self._iqueue = [] # incoming
-        self._oqueue = [] # outcoming
 
         self.name   = gen_id('MIHF')
-        self.peers  = []
-        self.links  = []
+        self.links  = dict()
         self.server = False
 
     def __str__(self):
@@ -68,149 +61,26 @@ class Mihf(object):
         """
         pass
 
-    def _make_socket(self, server=True):
-
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-        if server:
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, True)
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
-            sock.bind(('0.0.0.0', self.PORT))
-            sock.listen(1)
-        #else:
-            #sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
-            #sock.bind((self.HOST, self.PORT))
-
-        sock.setblocking(0)
-
-        return sock
-
-
-
-
-    def _add_peer(self, peer):
-        """
-        Add a new peer. *peer* must be an instance of the Peer named tuple.
-        """ 
-
-        self.peers[peer.name] = peer
-
-    def _remove_peer(self, peer):
-        """
-        Remove a peer. *peer* can either be the name of the peer, its socket 
-        or an instance of the Peer named tuple.
-        """
-
-        if isinstance(peer, str):
-            del self.peers[name]
-        elif isinstance(peer, socket):
-            for key, p in self.peers[name]:
-                if p.sock == peer:
-                    self.peers[key]
-                    return
-        else:
-            del self.peers[peer.name]
-
-    def _check_peers(self, sock):
-
-        assert self._server
-
-        # check for new peers
-        acceptable, _, _ = select.select([sock], [], [], 300 / 1000.0)
-
-        while acceptable:
-            client, addr = sock.accept()
-            data = client.recv(PAGE_SIZE)
-
-            msg = cPickle.loads(data)
-
-            peer = Peer(msg.src, client, addr)
-
-            client.setblocking(False)
-
-            self._add_peer(peer)
-
-            print "- New peer: ", peer
-
-            acceptable, _, _ = select.select([sock], [], [], 10 / 1000.0)
-
-    def _discover(self, sock):
-        if not self.links:
-            print 'No interfaces detected.'
-            sys.exit(-1)
-
-        for iface in self.links:
-            if iface.state == 'up' and self.carrier:
-                sock.setsockopt(socket.SOL_SOCKET, 25, iface.ifname) # 25 = SO_BINDTODEVICE
-                msg = Message.request(self.name, None, None, 'MIH_Discovery', None)
-                self._send(msg)
-
-        sock.setsockopt(socket.SOL_SOCKET, 25, '') # 25 = SO_BINDTODEVICE
-
-    def _synchronize(self, sock):
-        """Receive and/or send queued messages"""
-
-        if not self.peers:
-            # flush oqueue
-            return
-
-        # NOTE: recv() and send() might not receive/send all the data
-
-        for key, peer in self.peers:
-            try:
-                data = peer.sock.recv(PAGE_SIZE)
-
-                print data
-
-                if data:
-                    self._iqueue.append(cPickle.loads(data))
-
-            except socket.error, msg:
-                print msg
-        
-        if self._oqueue:
-            for msg in self._oqueue:
-                
-                if not msg.dest in self.peers:
-                    print "- Peer not found:", msg.dest
-                    self._oqueue.remove(msg)
-                    continue
-
-                data = msg.ljust(PAGE_SIZE, '\x00')
-               
-                try:
-                    peer = self.peers[msg.dest]
-                    peer.sock.send(data)
-                except socket.error, msg:
-                    print msg
-
-    def _send(self, what):
-        sock.send(what)
-        #self._oqueue.append(what)
-
-    def _recv(self):
-        if self._iqueue:
-            return self._iqueue.pop()
-        else:
-            return None
-
     def _refresh_links(self):
         links = detect_local_links()
 
         # detect new links
-        for key, value in links:
+        for key, link in links.items():
             if not key in self.links:
                 # TODO: send link up events
-                self.links[key] = value
+                link.on_link_up   = self.on_link_up
+                link.on_link_down = self.on_link_down
+                self.links[key] = link
 
         # remove dead links
-        for key, value in self.links:
+        for key, link in self.links.items():
             if not key in links:
                 # TODO: send link down events
                 del self.links[key]
        
         # refresh everything
-        for key, link in self.links:
+        for key, link in self.links.items():
+
             self.links[key].refresh()
 
     def serve(self):
@@ -220,45 +90,36 @@ class Mihf(object):
 
     def run(self):
 
-        sock = self._make_socket(self._server)
-        
-
         while True:
-
             self._refresh_links()
-
-            for key, peer in self.peers:
-                try:
-                    data = peer.sock.recv(PAGE_SIZE)
-
-                    print data
-
-                    if data:
-                        self._iqueue.append(cPickle.loads(data))
-
-                except socket.error, msg:
-                    print msg
-                data = peer
-            self._synchronize(sock)
-
-            for link in self.links:
-                link.refresh()
+            time.sleep(0.3)
 
         sock.shutdown()
         sock.close()
 
     # MIES --------------------------------------------------------------------
-
-    def _init_mies(self):
-        self.subscribers = dict()
-
+    # local link -> mihf events
+    
     def on_link_up(self, link):
+        self.emit('mih_link_up.indication')
         print link.ifname, 'is up'
 
     def on_link_down(self, link):
+        self.emit('mih_link_down.indication')
         print link.ifname, 'is down'
+    
+    def on_link_going_down(self, link):
+        self.emit('mih_link_going_down.indication')
+        print link.ifname, 'is going down'
 
     def subscribe(self, event, receiver):
+        matches = re.match('(\w+):(\w.+)', event)
+
+        event = matches.group(2)
+
+        if not matches.group(1) == '@': # not local
+            receiver = self.subscribers[matches.group(1)]
+
         if event in self.subscribers:
             self.subscribers[event].append(receiver)
         else:
@@ -277,10 +138,6 @@ class Mihf(object):
     # MICS --------------------------------------------------------------------
 
     # MIIS --------------------------------------------------------------------
-
-def on_mih_event(event, mihf, sender):
-    print 'Event', event, 'triggered by', sender
-
 
 def parse_args(argv):
 
@@ -301,10 +158,6 @@ def main(argv=None):
 #    print args
 
     f = Mihf()
-    f.subscribe('mih_link_up_indication', on_mih_event)
-    f.subscribe('mih_link_down_indication', on_mih_event)
-
-
 
 #    print str(f)
 #    print Message.indication(str(f), str(f), 'MIES', 'mih_link_up', 'eth0')
