@@ -9,11 +9,12 @@ import cPickle
 import select
 import resource
 import argparse
+import collections
 
 from message import *
 from link import *
+import util
 
-import collections
 
 PAGE_SIZE = resource.getpagesize()
 
@@ -24,8 +25,6 @@ def gen_id(name):
 
     return (name.strip() + '-' + str(os.urandom(4)).encode('hex_codec')).upper()
 
-def normalize_data(s):
-    return s.ljust(PAGE_SIZE, '\0x00')
 
 Peer = collections.namedtuple('Peer', 'name, sock, addr')
 
@@ -38,6 +37,12 @@ class Mihf(object):
         self.name   = gen_id('MIHF')
         self.links  = dict()
         self.server = False
+        self.peers  = []
+
+    def __del__(self):
+        if self.sock:
+            #self.sock.shutdown()
+            self.sock.close()
 
     def __str__(self):
         return self.name
@@ -63,12 +68,12 @@ class Mihf(object):
         pass
 
     def run(self):
-        while True:
-            self._refresh_links()
-            time.sleep(0.3)
+        self._main_loop()
 
     # local link events
     def _link_up_event(self, link):
+        self._discovery(link)
+
         self._bcast_message('mih_link_up.indication', link.ifname)
         print link.ifname, 'is up'
 
@@ -87,7 +92,8 @@ class Mihf(object):
         return
 
     def _discovery(self, iface):
-       pass
+        #util.sendto(self.sock, ('255.255.255.255',1234), 'whos there?')there
+        pass
 
     def _send_message(self, peer, kind, payload):
         m = Message(self.name, kind, payload)
@@ -97,6 +103,54 @@ class Mihf(object):
         data = peer.sock.recv(PAGE_SIZE)
         return cPickle.loads(data)
 
+    def _create_socket(self):
+        #self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+        if self.server:
+            self.sock.bind(('0.0.0.0', self.PORT))
+            #self.sock.listen(1)
+        #else:
+        #    self.sock.bind(('255.255.255.255',0))
+        
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, True)
+
+        self.sock.setblocking(False)
+        self.sock.settimeout(0.3)
+   
+    def _main_loop(self):
+        
+        self._create_socket()
+
+        print self.sock.getsockname()
+
+        while True:
+            pair = util.recvfrom(self.sock)
+            message = None
+
+            if pair:
+                data, addr = pair
+                message = cPickle.loads(data)
+
+            if message:
+                print message.source, message.kind
+
+            #if not psock:
+            #    print '<--',psock[1],psock[0].rstrip('\x00')
+
+            #if not self.server:
+            #    if psock:
+            #        util.sendto(self.sock, psock[1], 'hi there.')
+            #    else:
+            #        util.sendto(self.sock, ('255.255.255.255',1234), 'whos there?')
+            #else:
+            #    if psock:
+            #        util.sendto(self.sock, psock[1], 'hello')
+
+            self._refresh_links()
+            time.sleep(0.3)
+
     def _refresh_links(self):
         links = detect_local_links()
 
@@ -104,8 +158,9 @@ class Mihf(object):
         for key, link in links.items():
             if not key in self.links:
                 # TODO: send link up events
-                link.on_link_up   = self.on_link_up
-                link.on_link_down = self.on_link_down
+                link.on_link_up   = self._link_up_event
+                link.on_link_down = self._link_down_event
+                link.on_link_going_down = self._link_going_down_event
                 self.links[key] = link
 
         # remove dead links

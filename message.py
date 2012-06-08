@@ -1,5 +1,7 @@
 # vim: ts=8 sts=4 sw=4 et ai nu
 
+import collections
+
 MessageBase = collections.namedtuple('Message', 'source, kind, payload')
 
 class Message(MessageBase):
