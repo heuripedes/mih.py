@@ -1,4 +1,4 @@
-# vim: ts=8 sts=4 sw=4 et
+# vim: ts=8 sts=4 sw=4 et ai nu
 
 import os
 import re
@@ -17,13 +17,15 @@ import collections
 
 PAGE_SIZE = resource.getpagesize()
 
-
 def gen_id(name):
     """
     :return name+random hex number
     """
 
     return (name.strip() + '-' + str(os.urandom(4)).encode('hex_codec')).upper()
+
+def normalize_data(s):
+    return s.ljust(PAGE_SIZE, '\0x00')
 
 Peer = collections.namedtuple('Peer', 'name, sock, addr')
 
@@ -33,7 +35,6 @@ class Mihf(object):
     PORT = 1234
 
     def __init__(self):
-
         self.name   = gen_id('MIHF')
         self.links  = dict()
         self.server = False
@@ -47,7 +48,7 @@ class Mihf(object):
         """
         Discovers server MIHFs in the active networks.
         """
-        pass
+        assert not self.server
 
     def report(self):
         """
@@ -60,6 +61,41 @@ class Mihf(object):
         Switch to another link.
         """
         pass
+
+    def run(self):
+        while True:
+            self._refresh_links()
+            time.sleep(0.3)
+
+    # local link events
+    def _link_up_event(self, link):
+        self._bcast_message('mih_link_up.indication', link.ifname)
+        print link.ifname, 'is up'
+
+    def _link_down_event(self, link):
+        self._bcast_message('mih_link_down.indication', link.ifname)
+        print link.ifname, 'is down'
+    
+    def _link_going_down_event(self, link):
+        self._bcast_message('mih_link_going_down.indication', link.ifname)
+        print link.ifname, 'is going down'
+
+    # networking 
+    def _bcast_message(self, kind, payload):
+        for peer in self.peers:
+            self._send_message(peer, kind, payload)
+        return
+
+    def _discovery(self, iface):
+       pass
+
+    def _send_message(self, peer, kind, payload):
+        m = Message(self.name, kind, payload)
+        peer.sock.sendall(normalize_data(cPickle.dumps(m)))
+
+    def _recv_message(self, peer):
+        data = peer.sock.recv(PAGE_SIZE)
+        return cPickle.loads(data)
 
     def _refresh_links(self):
         links = detect_local_links()
@@ -82,62 +118,6 @@ class Mihf(object):
         for key, link in self.links.items():
 
             self.links[key].refresh()
-
-    def serve(self):
-        self._server = True
-
-        self.run()
-
-    def run(self):
-
-        while True:
-            self._refresh_links()
-            time.sleep(0.3)
-
-        sock.shutdown()
-        sock.close()
-
-    # MIES --------------------------------------------------------------------
-    # local link -> mihf events
-    
-    def on_link_up(self, link):
-        self.emit('mih_link_up.indication')
-        print link.ifname, 'is up'
-
-    def on_link_down(self, link):
-        self.emit('mih_link_down.indication')
-        print link.ifname, 'is down'
-    
-    def on_link_going_down(self, link):
-        self.emit('mih_link_going_down.indication')
-        print link.ifname, 'is going down'
-
-    def subscribe(self, event, receiver):
-        matches = re.match('(\w+):(\w.+)', event)
-
-        event = matches.group(2)
-
-        if not matches.group(1) == '@': # not local
-            receiver = self.subscribers[matches.group(1)]
-
-        if event in self.subscribers:
-            self.subscribers[event].append(receiver)
-        else:
-            self.subscribers[event] = [receiver]
-
-    def emit(self, event, sender):
-        if not event in self.subscribers:
-            return
-
-        for subscriber in self.subscribers[event]:
-            if isinstance(subscriber, str):
-                print subscriber
-            else:
-                subscriber(event, sender.mihf, sender)
-
-    # MICS --------------------------------------------------------------------
-
-    # MIIS --------------------------------------------------------------------
 
 def parse_args(argv):
 
@@ -162,10 +142,9 @@ def main(argv=None):
 #    print str(f)
 #    print Message.indication(str(f), str(f), 'MIES', 'mih_link_up', 'eth0')
 #
-    if args.server:
-        f.serve()
-    else:
-        f.run()
+
+    f.server = args.server
+    f.run()
 
     return 0
 
