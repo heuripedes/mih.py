@@ -42,7 +42,9 @@ def switch(link):
 
 
 def handle_link_up(link):
-    discovery(link)
+
+    if not g_server:
+        peer_discovery(link)
 
     bcast_message('mih_link_up.indication', link.ifname)
     print '-', link.ifname, 'is up'
@@ -63,13 +65,19 @@ def bcast_message(kind, payload):
         send_message(peer, kind, payload)
 
 
-def discovery(iface):
-    #util.sendto(sock, ('255.255.255.255',1234), 'whos there?')there
-    pass
+def peer_discovery(iface):
+
+    # TODO: use IP_PKTINFO
+    g_sock.setsockopt(socket.SOL_SOCKET, 25, iface.ifname) # 25 = SO_BINDTODEVICE
+
+    msg = Message.request(g_name, 'MIH_Discovery.request', None)
+    util.sendto(sock, MIHF_BCAST, cPickle.dumps(msg))
+
+    sock.setsockopt(socket.SOL_SOCKET, 25, '') # 25 = SO_BINDTODEVICE
 
 
 def send_message(peer, kind, payload):
-    m = Message(name, kind, payload)
+    m = Message(g_name, kind, payload)
     peer.sock.sendall(normalize_data(cPickle.dumps(m)))
 
 

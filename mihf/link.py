@@ -1,14 +1,16 @@
 # vim: ts=8 sts=4 sw=4 et
 
-import re
 import collections
+import subprocess
+import shlex
+import re
 
 def make_link(ifname):
     iface = None
 
-    if re.match('^eth', ifname):
+    if ifname.startswith('eth'):
         iface = Link80203(ifname)
-    elif re.match('^wlan', ifname):
+    elif ifname.startswith('wlan'):
         iface = Link80211(ifname)
 
     return iface
@@ -53,6 +55,8 @@ class Link(object):
         self.carrier  = False
         self.strenght = 0
 
+        self.ip_addr = ''
+
         # callbacks
         self.on_link_up = None
         self.on_link_down = None
@@ -67,6 +71,11 @@ class Link(object):
 
     def refresh(self):
         operstate = self.state
+
+        self.ip_addr = re.findall('inet ([^/]+)',
+                subprocess.check_output(
+                    shlex.split('ip -4 -o addr show '+self.ifname)
+                ))[0]
 
         with open('/sys/class/net/'+self.ifname+'/operstate') as f:
             operstate = f.readline().strip()
