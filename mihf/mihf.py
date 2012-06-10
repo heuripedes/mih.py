@@ -162,9 +162,3 @@ def run():
         #time.sleep(0.3)
 
 
-def parse_args(argv):
-
-    if argv is None:
-        argv = sys.argv[1:]
-
-
