@@ -1,7 +1,16 @@
 # vim: ts=8 sts=4 sw=4 et ai nu
 
+import os
 import socket
 import resource
+
+def gen_id(name):
+    """
+    :return name+random hex number
+    """
+
+    return (name.strip() + '-' + str(os.urandom(4)).encode('hex_codec')).upper()
+
 
 def normalize(s):
     return s.ljust(resource.getpagesize(), '\x00')
