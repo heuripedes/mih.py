@@ -12,7 +12,7 @@ from message import *
 from link import *
 import util
 
-Peer = collections.namedtuple('Peer', 'name, sock, addr')
+Peer = collections.namedtuple('Peer', 'name, addr')
 
 PAGE_SIZE = resource.getpagesize()
 
@@ -43,21 +43,39 @@ def switch(link):
 
 def handle_link_up(link):
 
+    print '-', link.ifname, 'is up'
+
     if not g_server:
         peer_discovery(link)
 
+
     bcast_message('mih_link_up.indication', link.ifname)
-    print '-', link.ifname, 'is up'
 
 
 def handle_link_down(link):
-    bcast_message('mih_link_down.indication', link.ifname)
     print '-', link.ifname, 'is down'
+
+    bcast_message('mih_link_down.indication', link.ifname)
 
 
 def handle_link_going_down(link):
-    bcast_message('mih_link_going_down.indication', link.ifname)
     print '-', link.ifname, 'is going down'
+
+    bcast_message('mih_link_going_down.indication', link.ifname)
+
+def handle_message(srcaddr, message):
+    msgkind = message.kind
+
+    if g_server and msgkind == 'mih_discovery.request':
+        print '- Found new peer:', message.source
+        p = Peer(message.source, srcaddr)
+        g_peers.append(p)
+        send_message(p, 'mih_discovery.response', g_links)
+
+    if not g_server and msgkind == 'mih_discovery.response':
+        print '- Found server:', message.source
+        p = Peer(message.source, srcaddr)
+        g_peers.append(p)
 
 
 def bcast_message(kind, payload):
@@ -70,21 +88,36 @@ def peer_discovery(iface):
     # TODO: use IP_PKTINFO
     g_sock.setsockopt(socket.SOL_SOCKET, 25, iface.ifname) # 25 = SO_BINDTODEVICE
 
-    msg = Message.request(g_name, 'MIH_Discovery.request', None)
-    util.sendto(sock, MIHF_BCAST, cPickle.dumps(msg))
+    msg = Message(g_name, 'mih_discovery.request', None)
 
-    sock.setsockopt(socket.SOL_SOCKET, 25, '') # 25 = SO_BINDTODEVICE
+    print '>', MIHF_BCAST, msg.kind
+
+    util.sendto(g_sock, MIHF_BCAST, cPickle.dumps(msg))
+
+    g_sock.setsockopt(socket.SOL_SOCKET, 25, '') # 25 = SO_BINDTODEVICE
 
 
 def send_message(peer, kind, payload):
     m = Message(g_name, kind, payload)
-    peer.sock.sendall(normalize_data(cPickle.dumps(m)))
+    util.sendto(g_sock, peer.addr, cPickle.dumps(m))
+        
+    print '>', peer.addr, m.kind
+
+    #peer.sock.sendall(normalize_data(cPickle.dumps(m)))
 
 
-def recv_message(peer):
-    data = peer.sock.recv(PAGE_SIZE)
-    return cPickle.loads(data)
+def recv_message():
+    pair = util.recvfrom(g_sock)
 
+    if pair:
+        data, addr = pair
+        message = cPickle.loads(data)
+
+        print '<', addr, message.kind
+
+        return addr, message
+
+    return None, None
 
 def create_socket():
     global g_sock
@@ -144,15 +177,10 @@ def run():
         print '- Server mode is on.'
 
     while True:
-        pair = util.recvfrom(g_sock)
-        message = None
-
-        if pair:
-            data, addr = pair
-            message = cPickle.loads(data)
+        addr, message = recv_message()
 
         if message:
-            print message.source, message.kind
+            handle_message(addr, message)
 
         #if not psock:
         #    print '<--',psock[1],psock[0].rstrip('\x00')

@@ -19,8 +19,8 @@ def recvfrom(sock):
     data = None
     try:
         data = sock.recvfrom(resource.getpagesize())
-        if data:
-            print '<',addr[1],len(data[0].rstrip('\x00')),'bytes.'
+        #if data:
+        #    print '<',data[1],len(data[0]),'bytes.'
 
     except socket.timeout:
         pass
@@ -30,7 +30,7 @@ def recvfrom(sock):
 def sendto(sock, addr, data):
     try:
         sent = sock.sendto(normalize(data), 0, addr)
-        print '>',addr,sent,'bytes.'
+        #print '>',addr,sent,'bytes.'
 
         return sent
     except socket.timeout:
