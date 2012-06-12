@@ -3,6 +3,14 @@
 
 import mihf
 
+def _handle_link_changes(link, status):
+    if status == 'up':
+        pass
+    if status == 'down':
+        pass
+    if status == 'going_down':
+        pass
+
 if __name__ == '__main__':
     import sys
     import argparse
@@ -18,7 +26,7 @@ if __name__ == '__main__':
     if args.server:
         mihf.serve()
     else:
-        mihf.run()
+        mihf.run(_handle_link_changes)
 
 
     sys.exit(0)

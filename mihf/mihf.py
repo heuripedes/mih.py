@@ -25,9 +25,9 @@ g_links  = dict()
 g_server = False
 g_peers  = []
 g_sock   = None
+g_user_handler = None
 
 __all__ = ['discover', 'report', 'switch', 'serve', 'run']
-
 
 def discover():
     assert not g_server
@@ -45,23 +45,36 @@ def handle_link_up(link):
 
     print '-', link.ifname, 'is up'
 
-    if not g_server:
+    if g_server:
+        bcast_message('mih_link_up.indication', link.ifname)
+    else:
         peer_discovery(link)
-
-
-    bcast_message('mih_link_up.indication', link.ifname)
+        if g_user_handler:
+            g_user_handler(link, 'up')
 
 
 def handle_link_down(link):
     print '-', link.ifname, 'is down'
 
-    bcast_message('mih_link_down.indication', link.ifname)
+    if g_server:
+        bcast_message('mih_link_down.indication', link.ifname)
+    else:
+        peer_discovery(link)
+        if g_user_handler:
+            g_user_handler(link, 'down')
 
 
 def handle_link_going_down(link):
     print '-', link.ifname, 'is going down'
+    
+    if g_server:
+        bcast_message('mih_link_going_down.indication', link.ifname)
+    else:
+        peer_discovery(link)
 
-    bcast_message('mih_link_going_down.indication', link.ifname)
+        if g_user_handler:
+            g_user_handler(link, 'going_down')
+
 
 def handle_message(srcaddr, message):
     msgkind = message.kind
@@ -167,8 +180,11 @@ def serve():
 
     run()
 
-def run():
-    
+def run(user_handler=None):
+    global g_user_handler 
+
+    g_user_handler = user_handler
+
     create_socket()
    
     print '- Starting MIHF', g_name
