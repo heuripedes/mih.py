@@ -4,6 +4,7 @@ import collections
 import subprocess
 import shlex
 import re
+import util
 
 def make_link(ifname):
     iface = None
@@ -127,14 +128,16 @@ class Link80203(Link):
         super(Link80203, self).refresh()
 
 class Link80211(Link):
-    THRESHOLD = 30
+    THRESHOLD = 37
+    SAMPLES   = 100
+
     def __init__(self, ifname):
         super(Link80211, self).__init__(ifname)
 
         self.wireless = True
         self.quality  = 0
 
-        self.qualities = collections.deque(maxlen=10)
+        self.qualities = collections.deque(maxlen=100)
    
     def refresh(self):
         super(Link80211, self).refresh()
@@ -153,3 +156,4 @@ class Link80211(Link):
         self.essid = re.findall('ESSID:"([^"$]+)',
             subprocess.check_output(shlex.split('iwconfig '+self.ifname)))[0] \
             .strip()
+

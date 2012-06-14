@@ -11,6 +11,8 @@ def gen_id(name):
 
     return (name.strip() + '-' + str(os.urandom(4)).encode('hex_codec')).upper()
 
+def average(samples):
+    return reduce(lambda total, value: total + value, samples) / len(samples)
 
 def normalize(s):
     return s.ljust(resource.getpagesize(), '\x00')
