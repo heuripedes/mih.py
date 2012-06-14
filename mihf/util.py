@@ -14,8 +14,10 @@ def gen_id(name):
 def average(samples):
     return reduce(lambda total, value: total + value, samples) / len(samples)
 
+
 def normalize(s):
     return s.ljust(resource.getpagesize(), '\x00')
+
 
 def recvfrom(sock):
     data = None
@@ -29,6 +31,7 @@ def recvfrom(sock):
 
     return data
 
+
 def sendto(sock, addr, data):
     try:
         sent = sock.sendto(normalize(data), 0, addr)
@@ -40,6 +43,7 @@ def sendto(sock, addr, data):
 
     return 0
 
+
 def accept(sock):
 	csock = None
 	try:
@@ -50,3 +54,5 @@ def accept(sock):
 		raise e
 
 	return csock
+
+
