@@ -96,7 +96,6 @@ def handle_message(srcaddr, message):
                 data['remote'] = True
                 link = make_link_kw(**data)
 
-
                 print '- Found link', link.ifname, 'at', message.source
 
             p = Peer(message.source, srcaddr)
@@ -173,12 +172,12 @@ def create_socket():
 
 
 def refresh_links():
+
     links = detect_local_links()
 
-    # detect new links
+    # add new links
     for key, link in links.items():
         if not key in g_links:
-            # TODO: send link up events
             link.on_link_up   = handle_link_up
             link.on_link_down = handle_link_down
             link.on_link_going_down = handle_link_going_down
@@ -187,7 +186,6 @@ def refresh_links():
     # remove dead links
     for key, link in g_links.items():
         if not key in links:
-            # TODO: send link down events
             del g_links[key]
    
     # refresh everything
