@@ -79,31 +79,37 @@ def link_data_list():
 def handle_message(srcaddr, message):
     msgkind = message.kind
 
-    if g_server and msgkind == 'mih_discovery.request':
-        print '- Found new peer:', message.source
-        p = Peer(message.source, srcaddr)
-        g_peers.append(p)
-        send_message(p, 'mih_discovery.response', cPickle.dumps(link_data_list()))
-
-    # Server doesn't handle anything else.
     if g_server:
-        return
+        if msgkind == 'mih_discovery.request':
+            print '- Found new peer:', message.source
+            p = Peer(message.source, srcaddr)
+            g_peers.append(p)
+            send_message(p, 'mih_discovery.response', cPickle.dumps(link_data_list()))
 
-    if msgkind == 'mih_discovery.response':
-        print '- Found server:', message.source
-        print '\tLinks: ', cPickle.loads(message.payload)
+    else:
+        if msgkind == 'mih_discovery.response':
+            print '- Found server:', message.source
 
-        p = Peer(message.source, srcaddr)
-        g_peers.append(p)
-    
-    if msgkind == 'mih_link_up.indication':
-        print '-', message.payload.iface, 'at', message.source, 'is now up.'
-    
-    if msgkind == 'mih_link_down.indication':
-        print '-', message.payload.iface, 'at', message.source, 'is now down.'
-    
-    if msgkind == 'mih_link_going_down.indication':
-        print '-', message.payload.iface, 'at', message.source, 'is going down.'
+            link_data = cPickle.loads(message.payload)
+
+            for data in link_data:
+                data['remote'] = True
+                link = make_link_kw(**data)
+
+
+                print '- Found link', link.ifname, 'at', message.source
+
+            p = Peer(message.source, srcaddr)
+            g_peers.append(p)
+        
+        if msgkind == 'mih_link_up.indication':
+            print '-', message.payload.iface, 'at', message.source, 'is now up.'
+        
+        if msgkind == 'mih_link_down.indication':
+            print '-', message.payload.iface, 'at', message.source, 'is now down.'
+        
+        if msgkind == 'mih_link_going_down.indication':
+            print '-', message.payload.iface, 'at', message.source, 'is going down.'
 
 
 

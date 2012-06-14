@@ -17,6 +17,18 @@ def make_link(ifname):
     return iface
 
 
+def make_link_kw(**kwargs):
+    iface = None
+    ifname = kwargs['ifname']
+
+    if ifname.startswith('eth'):
+        iface = Link80203(ifname)
+    elif ifname.startswith('wlan'):
+        iface = Link80211(ifname)
+
+    return iface
+
+
 def detect_local_links():
     """
     Looks for links in /proc/net/dev
@@ -33,21 +45,16 @@ def detect_local_links():
 
     links = dict()
 
-    #print '- Detected interfaces:', ', '.join(ifnames)
-
     for ifname in ifnames:
         iface = make_link(ifname)
 
         if iface:
-            #iface.on_link_up = self.on_link_up
-            #iface.on_link_down = self.on_link_down
-            #links.append(iface)
             links[ifname] = iface
 
     return links
 
 class Link(object):
-    def __init__(self, ifname):
+    def __init__(self, ifname, **kwargs):
         self.ifname = ifname
 
         self.state = 'unknown'
@@ -63,8 +70,14 @@ class Link(object):
         self.on_link_down = None
         self.on_link_going_down = None
 
-        with open('/sys/class/net/'+self.ifname+'/address') as f:
-            self.address = f.readline().strip()
+        self.remote = False
+
+        for key in kwargs:
+            self[key] = kwargs[key]
+
+        if not self.remote:
+            with open('/sys/class/net/'+self.ifname+'/address') as f:
+                self.address = f.readline().strip()
 
     def data(self):
         return {
@@ -77,24 +90,15 @@ class Link(object):
             'essid'    : getattr(self, 'essid', None)
         }
 
-        #d = LinkData(
-        #    ifname=self.ifname, 
-        #    state=self.state,
-        #    ipaddr=self.ipaddr,
-        #    carrier=self.carrier,
-        #    wireless=self.wireless,
-        #    strenght=self.strenght)
-
-        #if hasattr(self, 'essid'):
-        #    d.essid = self.essid
-
-        #return d
-
     def __str__(self):
         return '<%s : %s %s>' \
                 % (self.__class__.__name__, self.ifname, self.address)
 
     def refresh(self):
+
+        if self.remote:
+            return
+
         operstate = self.state
 
         with open('/sys/class/net/'+self.ifname+'/operstate') as f:
@@ -118,21 +122,25 @@ class Link(object):
                 
 
 class Link80203(Link):
-    def __init__(self, ifname):
-        super(Link80203, self).__init__(ifname)
+    def __init__(self, ifname, **kwargs):
+        super(Link80203, self).__init__(ifname, **kwargs)
 
     def refresh(self):
+        if self.remote:
+            return
+
         with open('/sys/class/net/'+self.ifname+'/carrier') as f:
             self.carrier = f.readline().strip() == '1'
 
         super(Link80203, self).refresh()
 
+
 class Link80211(Link):
     THRESHOLD = 37
     SAMPLES   = 100
 
-    def __init__(self, ifname):
-        super(Link80211, self).__init__(ifname)
+    def __init__(self, ifname, **kwargs):
+        super(Link80211, self).__init__(ifname, **kwargs)
 
         self.wireless = True
         self.quality  = 0
@@ -140,6 +148,9 @@ class Link80211(Link):
         self.qualities = collections.deque(maxlen=100)
    
     def refresh(self):
+        if self.remote:
+            return
+
         super(Link80211, self).refresh()
         
         if not self.state == 'up':
@@ -156,4 +167,5 @@ class Link80211(Link):
         self.essid = re.findall('ESSID:"([^"$]+)',
             subprocess.check_output(shlex.split('iwconfig '+self.ifname)))[0] \
             .strip()
+
 
