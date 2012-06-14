@@ -42,7 +42,6 @@ def switch(link):
 
 
 def handle_link_up(link):
-
     print '-', link.ifname, 'is up'
 
     if g_server:
@@ -59,7 +58,6 @@ def handle_link_down(link):
     if g_server:
         bcast_message('mih_link_down.indication', link.ifname)
     else:
-        peer_discovery(link)
         if g_user_handler:
             g_user_handler(link, 'down')
 
@@ -70,12 +68,14 @@ def handle_link_going_down(link):
     if g_server:
         bcast_message('mih_link_going_down.indication', link.ifname)
     else:
-        peer_discovery(link)
-
         if g_user_handler:
             g_user_handler(link, 'going_down')
 
 
+def link_data_list():
+    return map(lambda iface: iface.data(), g_links.values())
+
+        
 def handle_message(srcaddr, message):
     msgkind = message.kind
 
@@ -83,12 +83,28 @@ def handle_message(srcaddr, message):
         print '- Found new peer:', message.source
         p = Peer(message.source, srcaddr)
         g_peers.append(p)
-        send_message(p, 'mih_discovery.response', g_links)
+        send_message(p, 'mih_discovery.response', cPickle.dumps(link_data_list()))
 
-    if not g_server and msgkind == 'mih_discovery.response':
+    # Server doesn't handle anything else.
+    if g_server:
+        return
+
+    if msgkind == 'mih_discovery.response':
         print '- Found server:', message.source
+        print '\tLinks: ', cPickle.loads(message.payload)
+
         p = Peer(message.source, srcaddr)
         g_peers.append(p)
+    
+    if msgkind == 'mih_link_up.indication':
+        print '-', message.payload.iface, 'at', message.source, 'is now up.'
+    
+    if msgkind == 'mih_link_down.indication':
+        print '-', message.payload.iface, 'at', message.source, 'is now down.'
+    
+    if msgkind == 'mih_link_going_down.indication':
+        print '-', message.payload.iface, 'at', message.source, 'is going down.'
+
 
 
 def bcast_message(kind, payload):
@@ -179,6 +195,7 @@ def serve():
     g_server = True
 
     run()
+
 
 def run(user_handler=None):
     global g_user_handler 

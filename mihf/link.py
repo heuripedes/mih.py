@@ -1,4 +1,4 @@
-# vim: ts=8 sts=4 sw=4 et
+# vim: ts=8 sts=4 sw=4 et ai nu
 
 import collections
 import subprocess
@@ -55,7 +55,7 @@ class Link(object):
         self.carrier  = False
         self.strenght = 0
 
-        self.ip_addr = ''
+        self.ipaddr = ''
 
         # callbacks
         self.on_link_up = None
@@ -65,17 +65,36 @@ class Link(object):
         with open('/sys/class/net/'+self.ifname+'/address') as f:
             self.address = f.readline().strip()
 
+    def data(self):
+        return {
+            'ifname'   : self.ifname,
+            'state'    : self.state,
+            'ipaddr'   : self.ipaddr,
+            'carrier'  : self.carrier,
+            'wireless' : self.wireless,
+            'strenght' : self.strenght,
+            'essid'    : getattr(self, 'essid', None)
+        }
+
+        #d = LinkData(
+        #    ifname=self.ifname, 
+        #    state=self.state,
+        #    ipaddr=self.ipaddr,
+        #    carrier=self.carrier,
+        #    wireless=self.wireless,
+        #    strenght=self.strenght)
+
+        #if hasattr(self, 'essid'):
+        #    d.essid = self.essid
+
+        #return d
+
     def __str__(self):
         return '<%s : %s %s>' \
                 % (self.__class__.__name__, self.ifname, self.address)
 
     def refresh(self):
         operstate = self.state
-
-        self.ip_addr = re.findall('inet ([^/]+)',
-                subprocess.check_output(
-                    shlex.split('ip -4 -o addr show '+self.ifname)
-                ))[0]
 
         with open('/sys/class/net/'+self.ifname+'/operstate') as f:
             operstate = f.readline().strip()
@@ -87,6 +106,14 @@ class Link(object):
 
             if operstate == 'down' and self.on_link_down:
                 self.on_link_down(self)
+       
+        if self.state == 'up':
+            self.ipaddr = re.findall('inet ([^/]+)',
+                subprocess.check_output(
+                    shlex.split('ip -4 -o addr show '+self.ifname)))[0]
+        else:
+            self.ipaddr = None
+
                 
 
 class Link80203(Link):
@@ -115,10 +142,14 @@ class Link80211(Link):
         if not self.state == 'up':
             self.quality = 0
             self.qualities.clear()
+            self.essid = None
             return
         
         with open('/sys/class/net/'+self.ifname+'/wireless/link') as f:
             self.quality = f.readline().strip()
             self.qualities.append(self.quality)
 
-        
+         
+        self.essid = re.findall('ESSID:"([^"$]+)',
+            subprocess.check_output(shlex.split('iwconfig '+self.ifname)))[0] \
+            .strip()
