@@ -27,7 +27,13 @@ g_peers  = []
 g_sock   = None
 g_user_handler = None
 
-__all__ = ['discover', 'report', 'switch', 'serve', 'run']
+__all__ = ['discover', 'report', 'switch', 'serve', 'run', 'local_links', 'remote_links']
+
+def local_links():
+    return filter(lambda link: not link.remote, g_links)
+
+def remote_links():
+    return filter(lambda link: link.remote, g_links)
 
 def discover():
     assert not g_server

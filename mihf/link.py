@@ -48,6 +48,7 @@ def detect_local_links():
 
     return links
 
+
 class Link(object):
     def __init__(self, **kwargs):
         self.ifname = ''
@@ -76,6 +77,9 @@ class Link(object):
             with open('/sys/class/net/'+self.ifname+'/address') as f:
                 self.address = f.readline().strip()
 
+        #print kwargs
+
+
     def data(self):
         return {
             'ifname'   : self.ifname,
@@ -87,9 +91,11 @@ class Link(object):
             'essid'    : getattr(self, 'essid', None)
         }
 
+
     def __str__(self):
         return '<%s : %s %s>' \
                 % (self.__class__.__name__, self.ifname, self.address)
+
 
     def refresh(self):
 
@@ -101,6 +107,14 @@ class Link(object):
         with open('/sys/class/net/'+self.ifname+'/operstate') as f:
             operstate = f.readline().strip()
 
+        if operstate == 'up':
+            self.ipaddr = re.findall('inet ([^/]+)',
+                subprocess.check_output(
+                    shlex.split('ip -4 -o addr show '+self.ifname)))[0]
+        else:
+            self.ipaddr = None
+
+
         if operstate != self.state:
             self.state = operstate
             if operstate == 'up' and self.on_link_up:
@@ -109,13 +123,10 @@ class Link(object):
             if operstate == 'down' and self.on_link_down:
                 self.on_link_down(self)
 
-        if self.state == 'up':
-            self.ipaddr = re.findall('inet ([^/]+)',
-                subprocess.check_output(
-                    shlex.split('ip -4 -o addr show '+self.ifname)))[0]
-        else:
-            self.ipaddr = None
 
+
+    def up(self):
+        pass
 
 
 class Link80203(Link):
@@ -132,6 +143,18 @@ class Link80203(Link):
         super(Link80203, self).refresh()
 
 
+    def up(self):
+
+        if self.remote:
+            print '- Cannot set status on remote links.'
+
+        # carrier is plugged in, just need to ask for a new ip
+        if self.carrier:
+            util.lease_renew(self.ifname)
+        else:
+            print '- Carrier not present.'
+
+
 class Link80211(Link):
     THRESHOLD = 37
     SAMPLES   = 100
@@ -143,6 +166,7 @@ class Link80211(Link):
         self.quality  = 0
 
         self.samples = collections.deque(maxlen=100)
+
 
     def refresh(self):
         if self.remote:
@@ -168,4 +192,24 @@ class Link80211(Link):
             subprocess.check_output(shlex.split('iwconfig '+self.ifname)))[0] \
             .strip()
 
+    def up(self, essid, key=None):
 
+        if self.remote:
+            print '- Cannot set status on remote links.'
+            return False
+
+        cmd = ['iwconfig', self.ifname, 'essid', essid]
+
+        if key:
+            cmd.append('key')
+            cmd.append(key)
+
+        success = subprocess.call(cmd)
+
+        # carrier is plugged in, just need to ask for a new ip
+        if success and self.carrier:
+            success = success and util.lease_renew(self.ifname)
+        else:
+            print '- Carrier not present.'
+
+        return success

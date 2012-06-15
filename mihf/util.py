@@ -4,6 +4,8 @@ import os
 import socket
 import resource
 import math
+import subprocess
+import errno
 
 def gen_id(name):
     """
@@ -47,14 +49,33 @@ def sendto(sock, addr, data):
 
 
 def accept(sock):
-	csock = None
-	try:
-		csock, _ = sock.accept()
-	except socket.timeout:
-		pass
-	except socket.error as e:
-		raise e
+    csock = None
+    try:
+            csock, _ = sock.accept()
+    except socket.timeout:
+            pass
+    except socket.error as e:
+            raise e
 
-	return csock
+    return csock
 
+def lease_renew(ifname):
+    success = False
+    try:
+        success = subprocess.call(['dhcpcd', '--release', ifname])
+        success = success and subprocess.call(['dhcpcd', '--rebind', ifname])
+    except OSError as e:
+        if not e.errno == errno.ENOENT:
+            raise e
 
+        try:
+            success = subprocess.call(['dhclient', '-r', ifname])
+            success = success and subprocess.call(['dhclient', ifname])
+        except OSError as e:
+            if not e.errno == errno.ENOENT:
+                raise e
+
+            print '- DHCP client program not found. Please install dhcpcd or dhclient.'
+            success = False
+
+    return success
