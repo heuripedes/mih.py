@@ -6,25 +6,20 @@ import shlex
 import re
 import util
 
-def make_link(ifname):
+def make_link(*args, **kwargs):
     iface = None
+    argdict = {}
+
+    if not kwargs:
+        ifname = args[0]
+        kwargs['ifname'] = args[0]
+    else:
+        ifname = kwargs['ifname']
 
     if ifname.startswith('eth'):
-        iface = Link80203(ifname)
+        iface = Link80203(**kwargs)
     elif ifname.startswith('wlan'):
-        iface = Link80211(ifname)
-
-    return iface
-
-
-def make_link_kw(**kwargs):
-    iface = None
-    ifname = kwargs['ifname']
-
-    if ifname.startswith('eth'):
-        iface = Link80203(ifname)
-    elif ifname.startswith('wlan'):
-        iface = Link80211(ifname)
+        iface = Link80211(**kwargs)
 
     return iface
 
@@ -46,7 +41,7 @@ def detect_local_links():
     links = dict()
 
     for ifname in ifnames:
-        iface = make_link(ifname)
+        iface = make_link(ifname=ifname)
 
         if iface:
             links[ifname] = iface
@@ -54,8 +49,8 @@ def detect_local_links():
     return links
 
 class Link(object):
-    def __init__(self, ifname, **kwargs):
-        self.ifname = ifname
+    def __init__(self, **kwargs):
+        self.ifname = ''
 
         self.state = 'unknown'
 
@@ -66,14 +61,16 @@ class Link(object):
         self.ipaddr = ''
 
         # callbacks
-        self.on_link_up = None
-        self.on_link_down = None
+        self.on_link_up         = None
+        self.on_link_down       = None
         self.on_link_going_down = None
 
         self.remote = False
 
         for key in kwargs:
-            self[key] = kwargs[key]
+            setattr(self, key, kwargs[key])
+
+        assert self.ifname
 
         if not self.remote:
             with open('/sys/class/net/'+self.ifname+'/address') as f:
@@ -111,7 +108,7 @@ class Link(object):
 
             if operstate == 'down' and self.on_link_down:
                 self.on_link_down(self)
-       
+
         if self.state == 'up':
             self.ipaddr = re.findall('inet ([^/]+)',
                 subprocess.check_output(
@@ -119,11 +116,11 @@ class Link(object):
         else:
             self.ipaddr = None
 
-                
+
 
 class Link80203(Link):
-    def __init__(self, ifname, **kwargs):
-        super(Link80203, self).__init__(ifname, **kwargs)
+    def __init__(self, **kwargs):
+        super(Link80203, self).__init__(**kwargs)
 
     def refresh(self):
         if self.remote:
@@ -139,31 +136,34 @@ class Link80211(Link):
     THRESHOLD = 37
     SAMPLES   = 100
 
-    def __init__(self, ifname, **kwargs):
-        super(Link80211, self).__init__(ifname, **kwargs)
+    def __init__(self, **kwargs):
+        super(Link80211, self).__init__(**kwargs)
 
         self.wireless = True
         self.quality  = 0
 
-        self.qualities = collections.deque(maxlen=100)
-   
+        self.samples = collections.deque(maxlen=100)
+
     def refresh(self):
         if self.remote:
             return
 
         super(Link80211, self).refresh()
-        
+
         if not self.state == 'up':
             self.quality = 0
-            self.qualities.clear()
+            self.samples.clear()
             self.essid = None
             return
-        
+
         with open('/sys/class/net/'+self.ifname+'/wireless/link') as f:
             self.quality = f.readline().strip()
-            self.qualities.append(self.quality)
+            self.samples.append(self.quality)
 
-         
+            if util.average(self.samples) < Link80211.THRESHOLD:
+                if self.on_link_going_down:
+                    self.on_link_going_down(self)
+
         self.essid = re.findall('ESSID:"([^"$]+)',
             subprocess.check_output(shlex.split('iwconfig '+self.ifname)))[0] \
             .strip()

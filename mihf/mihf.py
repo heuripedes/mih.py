@@ -94,9 +94,10 @@ def handle_message(srcaddr, message):
 
             for data in link_data:
                 data['remote'] = True
-                link = make_link_kw(**data)
+                data['ifname'] = data['ifname'] + '@' + message.source
+                link = make_link(**data)
 
-                print '- Found link', link.ifname, 'at', message.source
+                print '- Found remote link', link.ifname
 
             p = Peer(message.source, srcaddr)
             g_peers.append(p)

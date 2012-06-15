@@ -3,6 +3,7 @@
 import os
 import socket
 import resource
+import math
 
 def gen_id(name):
     """
@@ -11,8 +12,9 @@ def gen_id(name):
 
     return (name.strip() + '-' + str(os.urandom(4)).encode('hex_codec')).upper()
 
+
 def average(samples):
-    return reduce(lambda total, value: total + value, samples) / len(samples)
+    return math.fsum(samples) / len(samples)
 
 
 def normalize(s):
