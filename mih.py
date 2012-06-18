@@ -7,32 +7,31 @@ import os
 WIFI_ESSID = 'GREDES_TELEMATICA'
 WIFI_KEY   = ''
 
-def _handle_link_changes(link, status):
+def _handle_link_changes(link, status, uplinks):
+    print link, uplinks
+
+    if status == 'down' and status == 'going_down':
+        if link.remote or not uplinks:
+            return
+
+        better = uplinks[0]
+
+        for l in uplinks:
+            # wired is better than everything because i said so.
+            if not l.wireless:
+                better = l
+                return
+
+            if l.strenght > better.strenght:
+                better = l
+
+        mihf.switch(better)
+
     if status == 'up':
-        print 'user:',link.ifname,'is up'
-
-        if link.remote
-            return
-
         if not link.wireless:
-            if link.carrier and not link.ipaddr:
-                link.up()
-
-    if status == 'down':
-        print 'user:',link.ifname,'is down'
-
-        if link.remote
-            return
-
-        pass
-
-    if status == 'going_down':
-        print 'user:',link.ifname,'is going down'
-
-        if link.remote
-            return
-
-        pass
+            mihf.switch(link)
+        else:
+            print "dunno wat to do"
 
 if __name__ == '__main__':
     import sys

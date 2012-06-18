@@ -22,6 +22,7 @@ MIHF_ANY   = ('0.0.0.0', MIHF_PORT)
 
 g_name   = util.gen_id('MIHF')
 g_links  = dict()
+g_cur_link = None
 g_server = False
 g_peers  = []
 g_sock   = None
@@ -44,7 +45,23 @@ def report():
 
 
 def switch(link):
-    pass
+    global g_cur_link
+
+    print 'switching from', g_cur_link, 'to', link
+
+    if link == g_cur_link:
+        return
+
+    if not link.state == 'up' and not link.ipaddr:
+        link.up()
+    
+    #if g_cur_link:
+    #    g_cur_link.down()
+
+    g_cur_link = link
+
+
+    g_cur_link = link
 
 
 def handle_link_up(link):
@@ -54,8 +71,7 @@ def handle_link_up(link):
         bcast_message('mih_link_up.indication', link.ifname)
     else:
         peer_discovery(link)
-        if g_user_handler:
-            g_user_handler(link, 'up')
+        g_user_handler(link, 'up')
 
 
 def handle_link_down(link):
@@ -64,8 +80,7 @@ def handle_link_down(link):
     if g_server:
         bcast_message('mih_link_down.indication', link.ifname)
     else:
-        if g_user_handler:
-            g_user_handler(link, 'down')
+        g_user_handler(link, 'down')
 
 
 def handle_link_going_down(link):
@@ -74,8 +89,7 @@ def handle_link_going_down(link):
     if g_server:
         bcast_message('mih_link_going_down.indication', link.ifname)
     else:
-        if g_user_handler:
-            g_user_handler(link, 'going_down')
+        g_user_handler(link, 'going_down')
 
 
 def link_data_list():
@@ -179,6 +193,7 @@ def create_socket():
 
 
 def refresh_links():
+    global g_cur_link
 
     links = detect_local_links()
 
@@ -188,6 +203,7 @@ def refresh_links():
             link.on_link_up   = handle_link_up
             link.on_link_down = handle_link_down
             link.on_link_going_down = handle_link_going_down
+
             g_links[key] = link
 
     # remove dead links
@@ -211,7 +227,9 @@ def serve():
 def run(user_handler=None):
     global g_user_handler 
 
-    g_user_handler = user_handler
+    g_user_handler = lambda link, state: user_handler(link, state, \
+            [l for l in g_links.values() if l != link and l.state == 'up']) \
+            if user_handler else None
 
     create_socket()
    

@@ -55,6 +55,7 @@ class Link(object):
 
         self.state = 'unknown'
 
+        self.mobile   = False
         self.wireless = False
         self.carrier  = False
         self.strenght = 0
@@ -124,9 +125,8 @@ class Link(object):
                 self.on_link_down(self)
 
 
-
     def up(self):
-        pass
+        raise NotImplemented
 
 
 class Link80203(Link):
