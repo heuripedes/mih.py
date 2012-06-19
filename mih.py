@@ -7,10 +7,10 @@ import os
 WIFI_ESSID = 'GREDES_TELEMATICA'
 WIFI_KEY   = ''
 
-def _handle_link_changes(link, status, uplinks):
+def _client_user(link, status, uplinks):
     print link, uplinks
 
-    if status == 'down' and status == 'going_down':
+    if status == 'down' or status == 'going_down':
         if link.remote or not uplinks:
             return
 
@@ -33,6 +33,13 @@ def _handle_link_changes(link, status, uplinks):
         else:
             print "dunno wat to do"
 
+
+def _server_user(link, status, uplinks):
+
+    if status == 'up' and not link.ipaddr:
+        link.up()
+        
+
 if __name__ == '__main__':
     import sys
     import argparse
@@ -46,9 +53,9 @@ if __name__ == '__main__':
     args = parser.parse_args(argv)
 
     if args.server:
-        mihf.serve()
+        mihf.serve(_server_user)
     else:
-        mihf.run(_handle_link_changes)
+        mihf.run(_client_user)
 
 
     sys.exit(0)

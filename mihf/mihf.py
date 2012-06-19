@@ -20,6 +20,9 @@ MIHF_PORT  = 1234
 MIHF_BCAST = ('255.255.255.255', MIHF_PORT)
 MIHF_ANY   = ('0.0.0.0', MIHF_PORT)
 
+# from sys/socket.h
+SO_BINDTODEVICE = 25
+
 g_name   = util.gen_id('MIHF')
 g_links  = dict()
 g_cur_link = None
@@ -36,8 +39,19 @@ def local_links():
 def remote_links():
     return filter(lambda link: link.remote, g_links)
 
-def discover():
+def discover(iface):
     assert not g_server
+
+    # TODO: use IP_PKTINFO
+    g_sock.setsockopt(socket.SOL_SOCKET, SO_BINDTODEVICE, iface.ifname)
+
+    msg = Message(g_name, 'mih_discovery.request', None)
+
+    print '>', MIHF_BCAST, msg.kind
+
+    util.sendto(g_sock, MIHF_BCAST, cPickle.dumps(msg))
+
+    g_sock.setsockopt(socket.SOL_SOCKET, SO_BINDTODEVICE, '')
 
 
 def report():
@@ -61,17 +75,13 @@ def switch(link):
     g_cur_link = link
 
 
-    g_cur_link = link
-
-
 def handle_link_up(link):
     print '-', link.ifname, 'is up'
 
     if g_server:
         bcast_message('mih_link_up.indication', link.ifname)
-    else:
-        peer_discovery(link)
-        g_user_handler(link, 'up')
+
+    g_user_handler(link, 'up')
 
 
 def handle_link_down(link):
@@ -79,13 +89,13 @@ def handle_link_down(link):
 
     if g_server:
         bcast_message('mih_link_down.indication', link.ifname)
-    else:
-        g_user_handler(link, 'down')
+
+    g_user_handler(link, 'down')
 
 
 def handle_link_going_down(link):
     print '-', link.ifname, 'is going down'
-    
+
     if g_server:
         bcast_message('mih_link_going_down.indication', link.ifname)
     else:
@@ -95,7 +105,7 @@ def handle_link_going_down(link):
 def link_data_list():
     return map(lambda iface: iface.data(), g_links.values())
 
-        
+
 def handle_message(srcaddr, message):
     msgkind = message.kind
 
@@ -121,13 +131,13 @@ def handle_message(srcaddr, message):
 
             p = Peer(message.source, srcaddr)
             g_peers.append(p)
-        
+
         if msgkind == 'mih_link_up.indication':
             print '-', message.payload.iface, 'at', message.source, 'is now up.'
-        
+
         if msgkind == 'mih_link_down.indication':
             print '-', message.payload.iface, 'at', message.source, 'is now down.'
-        
+
         if msgkind == 'mih_link_going_down.indication':
             print '-', message.payload.iface, 'at', message.source, 'is going down.'
 
@@ -138,24 +148,10 @@ def bcast_message(kind, payload):
         send_message(peer, kind, payload)
 
 
-def peer_discovery(iface):
-
-    # TODO: use IP_PKTINFO
-    g_sock.setsockopt(socket.SOL_SOCKET, 25, iface.ifname) # 25 = SO_BINDTODEVICE
-
-    msg = Message(g_name, 'mih_discovery.request', None)
-
-    print '>', MIHF_BCAST, msg.kind
-
-    util.sendto(g_sock, MIHF_BCAST, cPickle.dumps(msg))
-
-    g_sock.setsockopt(socket.SOL_SOCKET, 25, '') # 25 = SO_BINDTODEVICE
-
-
 def send_message(peer, kind, payload):
     m = Message(g_name, kind, payload)
     util.sendto(g_sock, peer.addr, cPickle.dumps(m))
-        
+
     print '>', peer.addr, m.kind
 
     #peer.sock.sendall(normalize_data(cPickle.dumps(m)))
@@ -176,15 +172,11 @@ def recv_message():
 
 def create_socket():
     global g_sock
-    #sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     g_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     if g_server:
         g_sock.bind(('0.0.0.0', MIHF_PORT))
-        #sock.listen(1)
-    #else:
-    #    sock.bind(('255.255.255.255',0))
-    
+
     g_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
     g_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, True)
 
@@ -210,29 +202,28 @@ def refresh_links():
     for key, link in g_links.items():
         if not key in links:
             del g_links[key]
-   
+
     # refresh everything
     for key, link in g_links.items():
         #g_links[key].refresh()
         link.refresh()
 
 
-def serve():
-    global g_server 
+def serve(user_handler):
+    global g_server
     g_server = True
 
-    run()
+    run(user_handler)
 
 
-def run(user_handler=None):
-    global g_user_handler 
+def run(user_handler):
+    global g_user_handler
 
     g_user_handler = lambda link, state: user_handler(link, state, \
-            [l for l in g_links.values() if l != link and l.state == 'up']) \
-            if user_handler else None
+            [l for l in g_links.values() if l != link and l.state == 'up'])
 
     create_socket()
-   
+
     print '- Starting MIHF', g_name
 
     if g_server:
@@ -243,18 +234,6 @@ def run(user_handler=None):
 
         if message:
             handle_message(addr, message)
-
-        #if not psock:
-        #    print '<--',psock[1],psock[0].rstrip('\x00')
-
-        #if not server:
-        #    if psock:
-        #        util.sendto(sock, psock[1], 'hi there.')
-        #    else:
-        #        util.sendto(sock, ('255.255.255.255',1234), 'whos there?')
-        #else:
-        #    if psock:
-        #        util.sendto(sock, psock[1], 'hello')
 
         refresh_links()
         #time.sleep(0.3)

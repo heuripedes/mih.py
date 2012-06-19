@@ -5,6 +5,7 @@ import subprocess
 import shlex
 import re
 import util
+import time
 
 def make_link(*args, **kwargs):
     iface = None
@@ -134,13 +135,15 @@ class Link80203(Link):
         super(Link80203, self).__init__(**kwargs)
 
     def refresh(self):
+
+        super(Link80203, self).refresh()
+
         if self.remote:
             return
 
         with open('/sys/class/net/'+self.ifname+'/carrier') as f:
             self.carrier = f.readline().strip() == '1'
 
-        super(Link80203, self).refresh()
 
 
     def up(self):
@@ -155,9 +158,10 @@ class Link80203(Link):
             print '- Carrier not present.'
 
 
+
 class Link80211(Link):
     THRESHOLD = 37
-    SAMPLES   = 100
+    SAMPLES   = 10
 
     def __init__(self, **kwargs):
         super(Link80211, self).__init__(**kwargs)
@@ -169,10 +173,10 @@ class Link80211(Link):
 
 
     def refresh(self):
+        super(Link80211, self).refresh()
+
         if self.remote:
             return
-
-        super(Link80211, self).refresh()
 
         if not self.state == 'up':
             self.quality = 0
@@ -213,3 +217,18 @@ class Link80211(Link):
             print '- Carrier not present.'
 
         return success
+
+    def scan(self):
+
+        return {
+                'GREDES_TELEMATICA': {
+                    'nome': 'GREDES_TELEMATICA',
+                    'strenght': 60
+                    },
+                'LABIFTO': {
+                    'nome': 'LABIFTO',
+                    'strenght': 30
+                    }
+                }
+
+
