@@ -70,7 +70,7 @@ class Link(object):
         self.carrier  = False
         self.strenght = 0
 
-        self.ipaddr = ''
+        self.ipaddr = None
 
         # callbacks
         self.on_link_up         = None
@@ -82,14 +82,12 @@ class Link(object):
         for key in kwargs:
             setattr(self, key, kwargs[key])
 
-        assert self.ifname
-
         if not self.remote:
             with open('/sys/class/net/'+self.ifname+'/address') as f:
                 self.address = f.readline().strip()
 
-        #print kwargs
-
+    def ready(self):
+        return self.state == 'up' and self.ipaddr
 
     def data(self):
         return {
@@ -181,9 +179,9 @@ class Link80211(Link):
         super(Link80211, self).__init__(**kwargs)
 
         self.wireless = True
-        self.quality  = 0
+        self.strenght  = 0
 
-        self.samples = collections.deque(maxlen=100)
+        self.samples = collections.deque(maxlen=SAMPLES)
 
 
     def poll(self):
@@ -193,14 +191,15 @@ class Link80211(Link):
             return
 
         if not self.state == 'up':
-            self.quality = 0
+            self.strenght = 0
             self.samples.clear()
             self.essid = None
             return
 
-        with open('/sys/class/net/'+self.ifname+'/wireless/link') as f:
-            self.quality = int(f.readline().strip())
-            self.samples.append(self.quality)
+        if self.ready():
+            with open('/sys/class/net/'+self.ifname+'/wireless/link') as f:
+                self.strenght = int(f.readline().strip())
+                self.samples.append(self.strenght)
 
         self.essid = re.findall('ESSID:"([^"$]+)',
             subprocess.check_output(shlex.split('iwconfig '+self.ifname)))[0] \
@@ -213,7 +212,7 @@ class Link80211(Link):
         if self.remote or not self.state == 'up':
             return
 
-        if util.average(self.samples) < Link80211.THRESHOLD:
+        if len(self.samples) == SAMPLES and util.average(self.samples) < Link80211.THRESHOLD:
             if self.on_link_going_down:
                 self.on_link_going_down(self)
 
