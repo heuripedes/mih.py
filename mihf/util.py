@@ -16,7 +16,15 @@ def gen_id(name):
 
 
 def average(samples):
-    return math.fsum(samples) / len(samples)
+    count = len(samples)
+    total = 0
+    for sample in samples:
+        if sample == 0:
+            count = count - 1
+        else:
+            total = total + sample
+
+    return total / count
 
 
 def normalize(s):

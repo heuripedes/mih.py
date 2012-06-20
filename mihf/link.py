@@ -6,6 +6,12 @@ import shlex
 import re
 import util
 import time
+import os
+
+WIFI_ESSID = 'GREDES_TELEMATICA'
+WIFI_KEY   = ''
+WIFI_ESSID = 'LABIFTO'
+WIFI_KEY   = 's:1234567890'
 
 def make_link(*args, **kwargs):
     iface = None
@@ -17,10 +23,10 @@ def make_link(*args, **kwargs):
     else:
         ifname = kwargs['ifname']
 
-    if ifname.startswith('eth'):
-        iface = Link80203(**kwargs)
-    elif ifname.startswith('wlan'):
+    if os.path.isdir('/sys/class/net/'+ifname+'/wireless'):
         iface = Link80211(**kwargs)
+    else:
+        iface = Link80203(**kwargs)
 
     return iface
 
@@ -30,13 +36,15 @@ def detect_local_links():
     Looks for links in /proc/net/dev
     """
 
-    ifnames = []
+    ifnames  = []
+    prefixes = ('lo', 'virbr', 'vboxnet')
 
     with open('/proc/net/dev') as f:
         for line in f:
             if line.count('|') < 1:
                 ifname = line.strip().split(':')[0]
-                if not ifname == 'lo':
+
+                if not ifname.startswith(prefixes):
                     ifnames.append(ifname)
 
     links = dict()
@@ -52,6 +60,7 @@ def detect_local_links():
 
 class Link(object):
     def __init__(self, **kwargs):
+
         self.ifname = ''
 
         self.state = 'unknown'
@@ -98,45 +107,52 @@ class Link(object):
         return '<%s : %s %s>' \
                 % (self.__class__.__name__, self.ifname, self.address)
 
-
-    def refresh(self):
+    def poll(self):
 
         if self.remote:
             return
 
-        operstate = self.state
-
         with open('/sys/class/net/'+self.ifname+'/operstate') as f:
-            operstate = f.readline().strip()
+            self.state = f.readline().strip()
 
-        if operstate == 'up':
-            self.ipaddr = re.findall('inet ([^/]+)',
-                subprocess.check_output(
-                    shlex.split('ip -4 -o addr show '+self.ifname)))[0]
+        if self.state == 'up':
+            matches = re.findall('inet ([^/]+)',
+                    subprocess.check_output(
+                        shlex.split('ip -4 -o addr show '+self.ifname)))
+            self.ipaddr = matches[0] if matches else None
         else:
             self.ipaddr = None
 
 
-        if operstate != self.state:
-            self.state = operstate
-            if operstate == 'up' and self.on_link_up:
+    def poll_and_notify(self):
+
+        if self.remote:
+            return
+
+        last_state = self.state
+
+        self.poll()
+
+        if last_state != self.state:
+            if self.state == 'up' and self.on_link_up:
                 self.on_link_up(self)
 
-            if operstate == 'down' and self.on_link_down:
+            if self.state == 'down' and self.on_link_down:
                 self.on_link_down(self)
 
-
     def up(self):
-        raise NotImplemented
+        if self.remote:
+            print '- Cannot set status on remote links.'
+
+        return subprocess.call(shlex.split('ip link set up dev '+self.ifname)) == 0
 
 
 class Link80203(Link):
     def __init__(self, **kwargs):
         super(Link80203, self).__init__(**kwargs)
 
-    def refresh(self):
-
-        super(Link80203, self).refresh()
+    def poll(self):
+        super(Link80203, self).poll()
 
         if self.remote:
             return
@@ -144,12 +160,10 @@ class Link80203(Link):
         with open('/sys/class/net/'+self.ifname+'/carrier') as f:
             self.carrier = f.readline().strip() == '1'
 
-
-
     def up(self):
-
-        if self.remote:
-            print '- Cannot set status on remote links.'
+        
+        if not super(Link80203, self).up():
+            return False
 
         # carrier is plugged in, just need to ask for a new ip
         if self.carrier:
@@ -172,8 +186,8 @@ class Link80211(Link):
         self.samples = collections.deque(maxlen=100)
 
 
-    def refresh(self):
-        super(Link80211, self).refresh()
+    def poll(self):
+        super(Link80211, self).poll()
 
         if self.remote:
             return
@@ -185,22 +199,32 @@ class Link80211(Link):
             return
 
         with open('/sys/class/net/'+self.ifname+'/wireless/link') as f:
-            self.quality = f.readline().strip()
+            self.quality = int(f.readline().strip())
             self.samples.append(self.quality)
-
-            if util.average(self.samples) < Link80211.THRESHOLD:
-                if self.on_link_going_down:
-                    self.on_link_going_down(self)
 
         self.essid = re.findall('ESSID:"([^"$]+)',
             subprocess.check_output(shlex.split('iwconfig '+self.ifname)))[0] \
             .strip()
 
-    def up(self, essid, key=None):
 
-        if self.remote:
-            print '- Cannot set status on remote links.'
+    def poll_and_notify(self):
+        super(Link80211, self).poll_and_notify()
+
+        if self.remote or not self.state == 'up':
+            return
+
+        if util.average(self.samples) < Link80211.THRESHOLD:
+            if self.on_link_going_down:
+                self.on_link_going_down(self)
+
+
+    def up(self):
+        essid=WIFI_ESSID
+        key=WIFI_KEY
+        if not super(Link80211, self).up():
             return False
+
+        subprocess.call(['rfkill', 'unblock', 'all'])
 
         cmd = ['iwconfig', self.ifname, 'essid', essid]
 

@@ -4,9 +4,6 @@
 import mihf
 import os
 
-WIFI_ESSID = 'GREDES_TELEMATICA'
-WIFI_KEY   = ''
-
 def _client_user(link, status, uplinks):
     print link, uplinks
 
@@ -30,8 +27,8 @@ def _client_user(link, status, uplinks):
     if status == 'up':
         if not link.wireless:
             mihf.switch(link)
-        else:
-            print "dunno wat to do"
+
+        mihf.discover(link)
 
 
 def _server_user(link, status, uplinks):

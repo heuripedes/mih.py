@@ -61,7 +61,7 @@ def report():
 def switch(link):
     global g_cur_link
 
-    print 'switching from', g_cur_link, 'to', link
+    print '- Switching from', g_cur_link, 'to', link
 
     if link == g_cur_link:
         return
@@ -79,7 +79,7 @@ def handle_link_up(link):
     print '-', link.ifname, 'is up'
 
     if g_server:
-        bcast_message('mih_link_up.indication', link.ifname)
+        bcast_message('mih_link_up.indication', cPickle.dumps(link))
 
     g_user_handler(link, 'up')
 
@@ -88,16 +88,16 @@ def handle_link_down(link):
     print '-', link.ifname, 'is down'
 
     if g_server:
-        bcast_message('mih_link_down.indication', link.ifname)
+        bcast_message('mih_link_down.indication', cPickle.dumps(link))
 
     g_user_handler(link, 'down')
 
 
 def handle_link_going_down(link):
-    print '-', link.ifname, 'is going down'
+    print '-', link.ifname, 'is going down. signal:',link.strenght,'average:',util.average(link.samples)
 
     if g_server:
-        bcast_message('mih_link_going_down.indication', link.ifname)
+        bcast_message('mih_link_going_down.indication', cPickle.dumps(link))
     else:
         g_user_handler(link, 'going_down')
 
@@ -133,13 +133,13 @@ def handle_message(srcaddr, message):
             g_peers.append(p)
 
         if msgkind == 'mih_link_up.indication':
-            print '-', message.payload.iface, 'at', message.source, 'is now up.'
+            print '-', cPickle.loads(message.payload).ifname, 'at', message.source, 'is now up.'
 
         if msgkind == 'mih_link_down.indication':
-            print '-', message.payload.iface, 'at', message.source, 'is now down.'
+            print '-', cPickle.loads(message.payload).ifname, 'at', message.source, 'is now down.'
 
         if msgkind == 'mih_link_going_down.indication':
-            print '-', message.payload.iface, 'at', message.source, 'is going down.'
+            print '-', cPickle.loads(message.payload).ifname, 'at', message.source, 'is going down.'
 
 
 
@@ -152,7 +152,7 @@ def send_message(peer, kind, payload):
     m = Message(g_name, kind, payload)
     util.sendto(g_sock, peer.addr, cPickle.dumps(m))
 
-    print '>', peer.addr, m.kind
+    #print '>', peer.addr, m.kind
 
     #peer.sock.sendall(normalize_data(cPickle.dumps(m)))
 
@@ -164,7 +164,7 @@ def recv_message():
         data, addr = pair
         message = cPickle.loads(data)
 
-        print '<', addr, message.kind
+        #print '<', addr, message.kind
 
         return addr, message
 
@@ -198,6 +198,9 @@ def refresh_links():
 
             g_links[key] = link
 
+            if g_server:
+                link.up()
+
     # remove dead links
     for key, link in g_links.items():
         if not key in links:
@@ -205,8 +208,8 @@ def refresh_links():
 
     # refresh everything
     for key, link in g_links.items():
-        #g_links[key].refresh()
-        link.refresh()
+        #g_links[key].poll_and_notify()
+        link.poll_and_notify()
 
 
 def serve(user_handler):
