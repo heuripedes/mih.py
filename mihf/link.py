@@ -155,8 +155,11 @@ class Link80203(Link):
         if self.remote:
             return
 
-        with open('/sys/class/net/'+self.ifname+'/carrier') as f:
-            self.carrier = f.readline().strip() == '1'
+        if self.state == 'up':
+            with open('/sys/class/net/'+self.ifname+'/carrier') as f:
+                self.carrier = f.readline().strip() == '1'
+        else:
+            self.carrier = False
 
     def up(self):
         

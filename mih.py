@@ -5,7 +5,7 @@ import mihf
 import os
 
 def _client_user(link, status, uplinks):
-    print link, uplinks
+    #print link, uplinks
 
     if status == 'down' or status == 'going_down':
         if link.remote or not uplinks:
@@ -25,7 +25,9 @@ def _client_user(link, status, uplinks):
         mihf.switch(better)
 
     if status == 'up':
-        if not link.wireless:
+        current = mihf.current_link() 
+
+        if not current or (current.wireless and not link.wireless):
             mihf.switch(link)
 
         mihf.discover(link)

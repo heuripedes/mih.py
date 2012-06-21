@@ -27,17 +27,22 @@ g_name   = util.gen_id('MIHF')
 g_links  = dict()
 g_cur_link = None
 g_server = False
-g_peers  = []
+g_peers  = dict()
 g_sock   = None
 g_user_handler = None
 
-__all__ = ['discover', 'report', 'switch', 'serve', 'run', 'local_links', 'remote_links']
+__all__ = ['discover', 'report', 'switch', 'serve', 'run', 'local_links', 'remote_links', 'current_link']
+
+def current_link():
+    return g_cur_link
 
 def local_links():
     return filter(lambda link: not link.remote, g_links)
 
+
 def remote_links():
     return filter(lambda link: link.remote, g_links)
+
 
 def discover(iface):
     assert not g_server
@@ -47,7 +52,7 @@ def discover(iface):
 
     msg = Message(g_name, 'mih_discovery.request', None)
 
-    print '>', MIHF_BCAST, msg.kind
+    #print '>', MIHF_BCAST, msg.kind
 
     util.sendto(g_sock, MIHF_BCAST, cPickle.dumps(msg))
 
@@ -78,8 +83,8 @@ def switch(link):
 def handle_link_up(link):
     print '-', link.ifname, 'is up'
 
-    if g_server:
-        bcast_message('mih_link_up.indication', cPickle.dumps(link))
+    #if g_server:
+    #    bcast_message('mih_link_up.indication', cPickle.dumps(link))
 
     g_user_handler(link, 'up')
 
@@ -87,8 +92,8 @@ def handle_link_up(link):
 def handle_link_down(link):
     print '-', link.ifname, 'is down'
 
-    if g_server:
-        bcast_message('mih_link_down.indication', cPickle.dumps(link))
+    #if g_server:
+    #    bcast_message('mih_link_down.indication', cPickle.dumps(link))
 
     g_user_handler(link, 'down')
 
@@ -96,10 +101,10 @@ def handle_link_down(link):
 def handle_link_going_down(link):
     print '-', link.ifname, 'is going down. signal:',link.strenght,'average:',util.average(link.samples)
 
-    if g_server:
-        bcast_message('mih_link_going_down.indication', cPickle.dumps(link))
-    else:
-        g_user_handler(link, 'going_down')
+    #if g_server:
+    #    bcast_message('mih_link_going_down.indication', cPickle.dumps(link))
+    
+    g_user_handler(link, 'going_down')
 
 
 def link_data_list():
@@ -113,7 +118,9 @@ def handle_message(srcaddr, message):
         if msgkind == 'mih_discovery.request':
             print '- Found new peer:', message.source
             p = Peer(message.source, srcaddr)
-            g_peers.append(p)
+
+            g_peers[message.source] = p
+
             send_message(p, 'mih_discovery.response', cPickle.dumps(link_data_list()))
 
     else:
@@ -129,22 +136,21 @@ def handle_message(srcaddr, message):
 
                 print '- Found remote link', link.ifname
 
-            p = Peer(message.source, srcaddr)
-            g_peers.append(p)
+            g_peers[message.source] = Peer(message.source, srcaddr)
 
-        if msgkind == 'mih_link_up.indication':
-            print '-', cPickle.loads(message.payload).ifname, 'at', message.source, 'is now up.'
+        #if msgkind == 'mih_link_up.indication':
+        #    print '-', cPickle.loads(message.payload).ifname, 'at', message.source, 'is now up.'
 
-        if msgkind == 'mih_link_down.indication':
-            print '-', cPickle.loads(message.payload).ifname, 'at', message.source, 'is now down.'
+        #if msgkind == 'mih_link_down.indication':
+        #    print '-', cPickle.loads(message.payload).ifname, 'at', message.source, 'is now down.'
 
-        if msgkind == 'mih_link_going_down.indication':
-            print '-', cPickle.loads(message.payload).ifname, 'at', message.source, 'is going down.'
+        #if msgkind == 'mih_link_going_down.indication':
+        #    print '-', cPickle.loads(message.payload).ifname, 'at', message.source, 'is going down.'
 
 
 
 def bcast_message(kind, payload):
-    for peer in g_peers:
+    for peer in g_peers.values():
         send_message(peer, kind, payload)
 
 
@@ -169,6 +175,7 @@ def recv_message():
         return addr, message
 
     return None, None
+
 
 def create_socket():
     global g_sock
