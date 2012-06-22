@@ -71,7 +71,7 @@ def switch(link):
     if link == g_cur_link:
         return
 
-    if not link.state == 'up' and not link.ipaddr:
+    if not link.ready():
         link.up()
     
     #if g_cur_link:
@@ -194,6 +194,8 @@ def create_socket():
 def refresh_links():
     global g_cur_link
 
+    has_ready_links = False
+
     links = detect_local_links()
 
     # add new links
@@ -205,6 +207,7 @@ def refresh_links():
 
             g_links[key] = link
 
+            # server must have as many up links as possible
             if g_server:
                 link.up()
 
@@ -218,6 +221,20 @@ def refresh_links():
         #g_links[key].poll_and_notify()
         link.poll_and_notify()
 
+        if link.ready():
+            has_ready_links = True
+
+    # try to turn something up
+    if not has_ready_links:
+        print "- No up link found, trying to activate one."
+        for name, link in g_links.items():
+            if link.wireless or link.mobile:
+                print "- Wireless link available, trying to activate."
+                link.up()
+
+                if link.ready():
+                    break
+
 
 def serve(user_handler):
     global g_server
@@ -229,8 +246,7 @@ def serve(user_handler):
 def run(user_handler):
     global g_user_handler
 
-    g_user_handler = lambda link, state: user_handler(link, state, \
-            [l for l in g_links.values() if l != link and l.state == 'up'])
+    g_user_handler = lambda link, state: user_handler(link, state, g_links.values())
 
     create_socket()
 

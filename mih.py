@@ -4,13 +4,18 @@
 import mihf
 import os
 
-def _client_user(link, status, uplinks):
+def _client_user(link, status, links):
     #print link, uplinks
+
+    uplinks = [link for link in links if link.ready()]
+    print status, link, link.ifname, link.ready()
+    import traceback
+    traceback.print_stack()
 
     if status == 'down' or status == 'going_down':
         if link.remote or not uplinks:
             return
-
+        print uplinks
         better = uplinks[0]
 
         for l in uplinks:
@@ -23,13 +28,14 @@ def _client_user(link, status, uplinks):
                 better = l
 
         mihf.switch(better)
-
-    if status == 'up':
+    elif status == 'up':
         current = mihf.current_link() 
-
-        if not current or (current.wireless and not link.wireless):
+        
+        if not current:
             mihf.switch(link)
-
+        else:
+            if current.mobile and not link.mobile:
+                mihf.switch(link)
         mihf.discover(link)
 
 

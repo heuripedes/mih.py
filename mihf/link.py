@@ -10,8 +10,10 @@ import os
 
 WIFI_ESSID = 'GREDES_TELEMATICA'
 WIFI_KEY   = ''
-WIFI_ESSID = 'LABIFTO'
-WIFI_KEY   = 's:1234567890'
+
+# get nmcli connection uuid
+# nmcli con list | grep ESSID | sed -r 's/.* (([a-f0-9]+-?){5}) .*/\1/'
+# nmcli con up UUID
 
 def make_link(*args, **kwargs):
     iface = None
@@ -87,7 +89,7 @@ class Link(object):
                 self.address = f.readline().strip()
 
     def ready(self):
-        return self.state == 'up' and self.ipaddr
+        return self.state == 'up' and self.ipaddr != None
 
     def data(self):
         return {
@@ -101,9 +103,9 @@ class Link(object):
         }
 
 
-    def __str__(self):
-        return '<%s : %s %s>' \
-                % (self.__class__.__name__, self.ifname, self.address)
+    #def __str__(self):
+    #    return '<%s : %s %s>' \
+    #            % (self.__class__.__name__, self.ifname, self.address)
 
     def poll(self):
 
@@ -132,17 +134,21 @@ class Link(object):
         self.poll()
 
         if last_state != self.state:
-            if self.state == 'up' and self.on_link_up:
+            if self.ready() and self.on_link_up:
+                print "x",self.ifname, self.ready()
                 self.on_link_up(self)
 
-            if self.state == 'down' and self.on_link_down:
+            if self.ready() and self.on_link_down:
                 self.on_link_down(self)
 
     def up(self):
         if self.remote:
             print '- Cannot set status on remote links.'
+        
+        if self.state == 'up':
+            return True
 
-        return subprocess.call(shlex.split('ip link set up dev '+self.ifname)) == 0
+        return (subprocess.call(shlex.split('ip link set up dev '+self.ifname)) == 0)
 
 
 class Link80203(Link):
@@ -162,18 +168,25 @@ class Link80203(Link):
             self.carrier = False
 
     def up(self):
-        
+        before = self.state
+
         if not super(Link80203, self).up():
             return False
-
+        
+        self.poll()
+        
         # carrier is plugged in, just need to ask for a new ip
         if self.carrier:
             util.lease_renew(self.ifname)
+            
+            self.poll()
+
+            if before != self.state and self.ready() and self.on_link_up:
+                self.on_link_up(self)
         else:
-            print '- Carrier not present.'
-
-
-
+            print '-', self.ifname+':', 'Carrier not present.'
+        
+        
 class Link80211(Link):
     THRESHOLD = 37
     SAMPLES   = 10
@@ -184,7 +197,7 @@ class Link80211(Link):
         self.wireless = True
         self.strenght  = 0
 
-        self.samples = collections.deque(maxlen=SAMPLES)
+        self.samples = collections.deque(maxlen=Link80211.SAMPLES)
 
 
     def poll(self):
@@ -193,16 +206,15 @@ class Link80211(Link):
         if self.remote:
             return
 
-        if not self.state == 'up':
+        if not self.ready():
             self.strenght = 0
             self.samples.clear()
             self.essid = None
             return
 
-        if self.ready():
-            with open('/sys/class/net/'+self.ifname+'/wireless/link') as f:
-                self.strenght = int(f.readline().strip())
-                self.samples.append(self.strenght)
+        with open('/sys/class/net/'+self.ifname+'/wireless/link') as f:
+            self.strenght = int(f.readline().strip())
+            self.samples.append(self.strenght)
 
         self.essid = re.findall('ESSID:"([^"$]+)',
             subprocess.check_output(shlex.split('iwconfig '+self.ifname)))[0] \
@@ -210,37 +222,49 @@ class Link80211(Link):
 
 
     def poll_and_notify(self):
-        super(Link80211, self).poll_and_notify()
-
-        if self.remote or not self.state == 'up':
+        if self.remote:
             return
 
-        if len(self.samples) == SAMPLES and util.average(self.samples) < Link80211.THRESHOLD:
+        super(Link80211, self).poll_and_notify()
+
+        if not self.ready():
+            return
+
+        if len(self.samples) == Link80211.SAMPLES and util.average(self.samples) < Link80211.THRESHOLD:
+            print "Avg:",util.average(self.samples),"Sgn:",self.strenght
+
             if self.on_link_going_down:
                 self.on_link_going_down(self)
 
-
     def up(self):
-        essid=WIFI_ESSID
-        key=WIFI_KEY
-        if not super(Link80211, self).up():
-            return False
+        essid = WIFI_ESSID
+        key = WIFI_KEY
+        before = self.state
 
         subprocess.call(['rfkill', 'unblock', 'all'])
+
+        if not super(Link80211, self).up():
+            return False
+        
+        self.poll()
+
 
         cmd = ['iwconfig', self.ifname, 'essid', essid]
 
         if key:
             cmd.append('key')
             cmd.append(key)
+        success = subprocess.call(cmd) == 0
 
-        success = subprocess.call(cmd)
-
-        # carrier is plugged in, just need to ask for a new ip
-        if success and self.carrier:
+        if success:
             success = success and util.lease_renew(self.ifname)
-        else:
-            print '- Carrier not present.'
+
+            self.poll()
+
+            #print self.ready()
+
+            if success and before != self.state and self.ready() and self.on_link_up:
+                self.on_link_up(self)
 
         return success
 
