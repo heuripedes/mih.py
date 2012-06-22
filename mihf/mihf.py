@@ -64,21 +64,27 @@ def report():
 
 
 def switch(link):
+    """Switches to another link."""
+
     global g_cur_link
 
-    print '- Switching from', g_cur_link, 'to', link
-
-    if link == g_cur_link:
-        return
-
-    if not link.ready():
+    if not link.is_ready():
         link.up()
-    
-    #if g_cur_link:
-    #    g_cur_link.down()
 
-    g_cur_link = link
+    if not link.is_ready():
+        #print '- switch():', 'failed to switch.'
+        link.down()
+        return False
+    else:
+        #print '- switch():', g_cur_link, '->', link
+        
+        old_link = g_cur_link
+        g_cur_link = link
 
+        if old_link:
+            old_link.down()
+
+        return True
 
 def handle_link_up(link):
     print '-', link.ifname, 'is up'
@@ -106,11 +112,19 @@ def handle_link_going_down(link):
     
     g_user_handler(link, 'going_down')
 
+def export_links():
+    """Returns a list of link data suitable for remote use."""
 
-def link_data_list():
-    return map(lambda iface: iface.data(), g_links.values())
+    links = list(g_links.values())
 
+    for link in links:
+        link.remote = True
+        link.ifname = link.ifname + '@' + g_name
 
+    links = map(lambda link: link.data(), links)
+
+    return links
+    
 def handle_message(srcaddr, message):
     msgkind = message.kind
 
@@ -121,7 +135,8 @@ def handle_message(srcaddr, message):
 
             g_peers[message.source] = p
 
-            send_message(p, 'mih_discovery.response', cPickle.dumps(link_data_list()))
+            send_message(p, 'mih_discovery.response',
+                    cPickle.dumps(export_links()))
 
     else:
         if msgkind == 'mih_discovery.response':
@@ -130,8 +145,6 @@ def handle_message(srcaddr, message):
             link_data = cPickle.loads(message.payload)
 
             for data in link_data:
-                data['remote'] = True
-                data['ifname'] = data['ifname'] + '@' + message.source
                 link = make_link(**data)
 
                 print '- Found remote link', link.ifname
@@ -193,6 +206,7 @@ def create_socket():
 
 def refresh_links():
     global g_cur_link
+    
 
     has_ready_links = False
 
@@ -211,29 +225,24 @@ def refresh_links():
             if g_server:
                 link.up()
 
-    # remove dead links
+    # remove dead links and refresh the rest
     for key, link in g_links.items():
         if not key in links:
             del g_links[key]
+        else:
+            link.poll_and_notify()
 
-    # refresh everything
-    for key, link in g_links.items():
-        #g_links[key].poll_and_notify()
-        link.poll_and_notify()
-
-        if link.ready():
-            has_ready_links = True
+            if link.is_ready():
+                has_ready_links = True
 
     # try to turn something up
     if not has_ready_links:
         print "- No up link found, trying to activate one."
         for name, link in g_links.items():
-            if link.wireless or link.mobile:
-                print "- Wireless link available, trying to activate."
-                link.up()
+            link.up()
 
-                if link.ready():
-                    break
+            if link.is_ready():
+                break
 
 
 def serve(user_handler):
@@ -246,7 +255,8 @@ def serve(user_handler):
 def run(user_handler):
     global g_user_handler
 
-    g_user_handler = lambda link, state: user_handler(link, state, g_links.values())
+    g_user_handler = lambda link, state: \
+        user_handler(link, state, g_links.values())
 
     create_socket()
 

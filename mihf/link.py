@@ -56,6 +56,8 @@ def detect_local_links():
 
         if iface:
             links[ifname] = iface
+        else:
+            print '- Unsupported interface:', ifname
 
     return links
 
@@ -88,7 +90,7 @@ class Link(object):
             with open('/sys/class/net/'+self.ifname+'/address') as f:
                 self.address = f.readline().strip()
 
-    def ready(self):
+    def is_ready(self):
         return self.state == 'up' and self.ipaddr != None
 
     def data(self):
@@ -106,6 +108,9 @@ class Link(object):
     #def __str__(self):
     #    return '<%s : %s %s>' \
     #            % (self.__class__.__name__, self.ifname, self.address)
+
+    def __eq__(self, obj):
+        return obj and self.__dict__ == obj.__dict__
 
     def poll(self):
 
@@ -129,26 +134,52 @@ class Link(object):
         if self.remote:
             return
 
-        last_state = self.state
+        last_state = self.is_ready()
 
         self.poll()
 
-        if last_state != self.state:
-            if self.ready() and self.on_link_up:
-                print "x",self.ifname, self.ready()
+        if last_state != self.is_ready():
+            import pdb
+            #pdb.set_trace()
+
+            if self.is_ready() and self.on_link_up:
                 self.on_link_up(self)
 
-            if self.ready() and self.on_link_down:
+            if not self.is_ready() and self.on_link_down:
                 self.on_link_down(self)
+    
+    def down(self):
+        if self.remote:
+            print '- Cannot set status on remote links.'
 
+        if not self.is_ready():
+            return
+
+        util.dhcp_release(self.ifname)
+
+        cmd = shlex.split('ip addr flush dev '+self.ifname)
+        success = (subprocess.call(cmd) == 0)
+
+        cmd = shlex.split('ip link set down dev '+self.ifname)
+        success = (subprocess.call(cmd) == 0)
+
+        self.poll()
+
+        if success and not self.is_ready() and self.on_link_down:
+            self.on_link_down(self)
+
+        return success
+        
     def up(self):
         if self.remote:
             print '- Cannot set status on remote links.'
         
         if self.state == 'up':
             return True
+        
+        cmd = 'ip link set up dev '+self.ifname
 
-        return (subprocess.call(shlex.split('ip link set up dev '+self.ifname)) == 0)
+        return (subprocess.call(shlex.split(cmd)) == 0)
 
 
 class Link80203(Link):
@@ -168,20 +199,22 @@ class Link80203(Link):
             self.carrier = False
 
     def up(self):
-        before = self.state
-
         if not super(Link80203, self).up():
             return False
         
+        if self.is_ready():
+            return True
+
         self.poll()
         
         # carrier is plugged in, just need to ask for a new ip
         if self.carrier:
-            util.lease_renew(self.ifname)
+            util.dhcp_release(self.ifname)
+            util.dhcp_renew(self.ifname)
             
             self.poll()
 
-            if before != self.state and self.ready() and self.on_link_up:
+            if self.is_ready() and self.on_link_up:
                 self.on_link_up(self)
         else:
             print '-', self.ifname+':', 'Carrier not present.'
@@ -206,7 +239,7 @@ class Link80211(Link):
         if self.remote:
             return
 
-        if not self.ready():
+        if not self.is_ready():
             self.strenght = 0
             self.samples.clear()
             self.essid = None
@@ -227,7 +260,7 @@ class Link80211(Link):
 
         super(Link80211, self).poll_and_notify()
 
-        if not self.ready():
+        if not self.is_ready():
             return
 
         if len(self.samples) == Link80211.SAMPLES and util.average(self.samples) < Link80211.THRESHOLD:
@@ -257,13 +290,14 @@ class Link80211(Link):
         success = subprocess.call(cmd) == 0
 
         if success:
-            success = success and util.lease_renew(self.ifname)
+            util.dhcp_release(self.ifname)
+            success = success and util.dhcp_renew(self.ifname)
 
             self.poll()
 
-            #print self.ready()
+            #print self.is_ready()
 
-            if success and before != self.state and self.ready() and self.on_link_up:
+            if success and before != self.state and self.is_ready() and self.on_link_up:
                 self.on_link_up(self)
 
         return success

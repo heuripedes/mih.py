@@ -7,35 +7,53 @@ import os
 def _client_user(link, status, links):
     #print link, uplinks
 
-    uplinks = [link for link in links if link.ready()]
-    print status, link, link.ifname, link.ready()
-    import traceback
-    traceback.print_stack()
+    #print status, link, link.ifname, link.is_ready()
+    #import traceback
+    #traceback.print_stack()
+
+    #print link.ifname, status
 
     if status == 'down' or status == 'going_down':
+
+        current = mihf.current_link()
+
+        if current.is_ready():
+            return
+
+        uplinks = [lnk for lnk in links if lnk.is_ready()]
+
         if link.remote or not uplinks:
             return
-        print uplinks
+        
+        
         better = uplinks[0]
 
         for l in uplinks:
             # wired is better than everything because i said so.
-            if not l.wireless:
+            if not l.wireless and not l.mobile:
                 better = l
-                return
+                break
 
             if l.strenght > better.strenght:
                 better = l
 
-        mihf.switch(better)
+        print "- Best link:", better.ifname
+
+        if mihf.switch(better):
+            print '- Switched to', better.ifname
+
     elif status == 'up':
         current = mihf.current_link() 
         
-        if not current:
-            mihf.switch(link)
-        else:
-            if current.mobile and not link.mobile:
-                mihf.switch(link)
+        # wired > wireless > mobile > None
+        if (current != link and
+            (not current or
+            (current.mobile and not link.mobile) or
+            (current.wireless and not link.wireless))):
+            
+            if mihf.switch(link):
+                print '- Switched to', link.ifname
+
         mihf.discover(link)
 
 

@@ -70,17 +70,32 @@ def accept(sock):
 def iface_up(ifname):
     import platform
 
-def lease_renew(ifname):
+def dhcp_release(ifname):
     retcode = False
     try:
         subprocess.call(['dhcpcd', '--release', ifname])
-        retcode = subprocess.call(['dhcpcd', '--rebind', ifname])
     except OSError as e:
         if not e.errno == errno.ENOENT:
             raise e
 
         try:
             subprocess.call(['dhclient', '-r', ifname])
+        except OSError as e:
+            if not e.errno == errno.ENOENT:
+                raise e
+
+            print '- DHCP client program not found. Please install dhcpcd or dhclient.'
+
+def dhcp_renew(ifname):
+    retcode = False
+
+    try:
+        retcode = subprocess.call(['dhcpcd', '--rebind', ifname])
+    except OSError as e:
+        if not e.errno == errno.ENOENT:
+            raise e
+
+        try:
             retcode = subprocess.call(['dhclient', ifname])
         except OSError as e:
             if not e.errno == errno.ENOENT:
