@@ -7,6 +7,9 @@ import math
 import subprocess
 import errno
 
+# from sys/socket.h
+SO_BINDTODEVICE = 25
+
 def gen_id(name):
     """
     :return name+random hex number
@@ -105,4 +108,7 @@ def dhcp_renew(ifname):
             retcode = 1
 
     return retcode == 0
+
+def bind_sock_to_device(sock, dev = ''):
+    sock.setsockopt(socket.SOL_SOCKET, SO_BINDTODEVICE, dev)
 

@@ -20,8 +20,6 @@ MIHF_PORT  = 1234
 MIHF_BCAST = ('255.255.255.255', MIHF_PORT)
 MIHF_ANY   = ('0.0.0.0', MIHF_PORT)
 
-# from sys/socket.h
-SO_BINDTODEVICE = 25
 
 g_name   = util.gen_id('MIHF')
 g_links  = dict()
