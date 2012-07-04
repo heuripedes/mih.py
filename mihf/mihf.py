@@ -1,5 +1,8 @@
 # vim: ts=8 sts=4 sw=4 et ai nu
 
+# TODO: Make the scheme comply to the blueprint. (wifi should be on/scanning 
+#       when using 3g connectivity)
+
 import os
 import sys
 import socket
@@ -34,6 +37,7 @@ __all__ = ['discover', 'report', 'switch', 'serve', 'run', 'local_links', 'remot
 def current_link():
     return g_cur_link
 
+
 def local_links():
     return filter(lambda link: not link.remote, g_links)
 
@@ -46,15 +50,13 @@ def discover(iface):
     assert not g_server
 
     # TODO: use IP_PKTINFO
-    g_sock.setsockopt(socket.SOL_SOCKET, SO_BINDTODEVICE, iface.ifname)
+    util.bind_sock_to_device(g_sock, iface.ifname)
 
     msg = Message(g_name, 'mih_discovery.request', None)
 
-    #print '>', MIHF_BCAST, msg.kind
-
     util.sendto(g_sock, MIHF_BCAST, cPickle.dumps(msg))
 
-    g_sock.setsockopt(socket.SOL_SOCKET, SO_BINDTODEVICE, '')
+    util.bind_sock_to_device(g_sock, '')
 
 
 def report():
@@ -84,6 +86,7 @@ def switch(link):
 
         return True
 
+
 def handle_link_up(link):
     print '-', link.ifname, 'is up'
 
@@ -110,6 +113,7 @@ def handle_link_going_down(link):
     
     g_user_handler(link, 'going_down')
 
+
 def export_links():
     """Returns a list of link data suitable for remote use."""
 
@@ -122,7 +126,8 @@ def export_links():
     links = map(lambda link: link.data(), links)
 
     return links
-    
+
+
 def handle_message(srcaddr, message):
     msgkind = message.kind
 
@@ -159,7 +164,6 @@ def handle_message(srcaddr, message):
         #    print '-', cPickle.loads(message.payload).ifname, 'at', message.source, 'is going down.'
 
 
-
 def bcast_message(kind, payload):
     for peer in g_peers.values():
         send_message(peer, kind, payload)
@@ -168,10 +172,6 @@ def bcast_message(kind, payload):
 def send_message(peer, kind, payload):
     m = Message(g_name, kind, payload)
     util.sendto(g_sock, peer.addr, cPickle.dumps(m))
-
-    #print '>', peer.addr, m.kind
-
-    #peer.sock.sendall(normalize_data(cPickle.dumps(m)))
 
 
 def recv_message():
@@ -204,34 +204,35 @@ def create_socket():
 
 def refresh_links():
     global g_cur_link
-    
 
     has_ready_links = False
 
-    links = detect_local_links()
+    ifnames = get_local_ifnames()
 
-    # add new links
-    for key, link in links.items():
-        if not key in g_links:
-            link.on_link_up   = handle_link_up
-            link.on_link_down = handle_link_down
-            link.on_link_going_down = handle_link_going_down
+    new  = filter(lambda ifname: ifname not in g_links, ifnames)
+    dead = filter(lambda ifname: ifname not in ifnames, g_links.keys())
 
-            g_links[key] = link
+    for ifname in new:
+        link = Link(ifname=ifname)
 
-            # server must have as many up links as possible
-            if g_server:
-                link.up()
+        link.on_link_up   = handle_link_up
+        link.on_link_down = handle_link_down
+        link.on_link_going_down = handle_link_going_down
 
-    # remove dead links and refresh the rest
-    for key, link in g_links.items():
-        if not key in links:
-            del g_links[key]
-        else:
+        g_links[ifname] = link
+            
+        # server must have as many up links as possible
+        if g_server:
+            link.up()
+
+    for ifname, link in g_links.items():
+        if not ifname in dead:
             link.poll_and_notify()
 
             if link.is_ready():
                 has_ready_links = True
+        else:
+            del g_links[ifname]
 
     # try to turn something up
     if not has_ready_links:

@@ -1,39 +1,23 @@
-# vim: ts=8 sts=4 sw=4 et ai nu
 
+import os
 import collections
-import subprocess
+import errno
 import shlex
+import subprocess as subproc
 import re
 import util
-import time
-import os
+
+WIRED_UP_STRENGHT   = 1000
+WIRED_DOWN_STRENGHT = 0
+    
 
 WIFI_ESSID = 'GREDES_TELEMATICA'
 WIFI_KEY   = ''
 
-# get nmcli connection uuid
-# nmcli con list | grep ESSID | sed -r 's/.* (([a-f0-9]+-?){5}) .*/\1/'
-# nmcli con up UUID
+WIFI_THRESHOLD = 37
+WIFI_SAMPLES   = 10
 
-def make_link(*args, **kwargs):
-    iface = None
-    argdict = {}
-
-    if not kwargs:
-        ifname = args[0]
-        kwargs['ifname'] = args[0]
-    else:
-        ifname = kwargs['ifname']
-
-    if os.path.isdir('/sys/class/net/'+ifname+'/wireless'):
-        iface = Link80211(**kwargs)
-    else:
-        iface = Link80203(**kwargs)
-
-    return iface
-
-
-def detect_local_links():
+def get_local_ifnames():
     """
     Looks for links in /proc/net/dev
     """
@@ -49,270 +33,228 @@ def detect_local_links():
                 if not ifname.startswith(prefixes):
                     ifnames.append(ifname)
 
-    links = dict()
-
-    for ifname in ifnames:
-        iface = make_link(ifname=ifname)
-
-        if iface:
-            links[ifname] = iface
-        else:
-            print '- Unsupported interface:', ifname
-
-    return links
+    return ifnames
 
 
-class Link(object):
+class Link:
+    __slots__ = ()
     def __init__(self, **kwargs):
-
-        self.ifname = ''
-
-        self.state = 'unknown'
-
-        self.mobile   = False
-        self.wireless = False
-        self.carrier  = False
-        self.strenght = 0
-
-        self.ipaddr = None
-
-        # callbacks
+        
+        # Callbacks
         self.on_link_up         = None
         self.on_link_down       = None
         self.on_link_going_down = None
 
-        self.remote = False
+        self.state = None # force link_up on first poll()
 
-        for key in kwargs:
-            setattr(self, key, kwargs[key])
-
-        if not self.remote:
-            with open('/sys/class/net/'+self.ifname+'/address') as f:
-                self.address = f.readline().strip()
-
-    def is_ready(self):
-        return self.state == 'up' and self.ipaddr != None
-
-    def data(self):
-        return {
-            'ifname'   : self.ifname,
-            'state'    : self.state,
-            'ipaddr'   : self.ipaddr,
-            'carrier'  : self.carrier,
-            'wireless' : self.wireless,
-            'strenght' : self.strenght,
-            'essid'    : getattr(self, 'essid', None)
-        }
+        self.update(**kwargs)
+        #self.poll()
 
 
-    #def __str__(self):
-    #    return '<%s : %s %s>' \
-    #            % (self.__class__.__name__, self.ifname, self.address)
+    def update(self, *args, **kwargs):
+        if not kwargs:
+            kwargs = args[0]
+            
+        self.wifi, self.wired, self.mobile = False, False, False
+        
+        if not hasattr(self, 'remote'):
+            self.remote = kwargs.pop('remote', False)
 
-    def __eq__(self, obj):
-        return obj and self.__dict__ == obj.__dict__
+        if not hasattr(self, 'name'):
+            self.name   = kwargs.pop('name', None)
+
+        if not hasattr(self, 'ifname'):
+            self.ifname =  kwargs.pop('ifname') # for now, required.
+
+            # TODO: Add check for mobile links.
+            if not self.remote:
+                if os.path.isdir('/sys/class/net/'+self.ifname+'/wireless'):
+                    self.wifi = True
+                else:
+                    self.wired = True
+
+        if self.wifi:
+            self.strenght = 0
+            self.samples  = collections.deque(maxlen=WIFI_SAMPLES)
+
+        if self.remote: 
+            self._ready = kwargs.pop('ready', False)
+
+            # Remote link information is mostly static
+            self.wifi   = kwargs.pop('wifi', False)
+            self.wired  = kwargs.pop('wired', False)
+            self.mobile = kwargs.pop('mobile', False)
+            self.macaddr = kwargs.pop('macaddr', None)
+            self.ipaddr  = kwargs.pop('ipaddr', None)
+            self.strenght =  kwargs.pop('strenght', -1)
+            self.carrier  =  kwargs.pop('carrier', False)
+            self.state    =  kwargs.pop('state', False)
+
 
     def poll(self):
-
         if self.remote:
             return
 
-        with open('/sys/class/net/'+self.ifname+'/operstate') as f:
-            self.state = f.readline().strip()
+        # MAC address
+        with open('/sys/class/net/'+self.ifname+'/address') as f:
+            self.macaddr = f.readline().strip()
 
-        if self.state == 'up':
-            matches = re.findall('inet ([^/]+)',
-                    subprocess.check_output(
-                        shlex.split('ip -4 -o addr show '+self.ifname)))
-            self.ipaddr = matches[0] if matches else None
-        else:
-            self.ipaddr = None
+        # Link state
+        matches = re.findall('Link detected: (yes|no)',
+                subproc.check_output(['ethtool',self.ifname]))
+        self.state = matches and matches[0] == 'yes'
 
+        #with open('/sys/class/net/'+self.ifname+'/operstate') as f:
+        #    state = f.readline().strip()
+        #    if state == '1':
+        #        self.state = True
+        #    elif state == '0':
+        #        self.state = False
+        #    else:
+        #        self.state = None
+
+        # IPv4 Address
+        matches = re.findall('inet ([^/]+)',
+                subproc.check_output(
+                    shlex.split('ip -4 -o addr show '+self.ifname)))
+        self.ipaddr = matches[0] if matches else None
+
+        ## Fix state
+        #if self.state is None:
+        #    if not self.ipaddr is None:
+        #        self.state = False
+        #    else:
+        #        util.iface_is_up(self.ifname)
+
+        # Cable
+        if self.state and self.wired:
+            # XXX: one exception might originate here if the interface
+            #      goes down before the read completes.
+            with open('/sys/class/net/'+self.ifname+'/carrier') as f:
+                self.carrier = f.readline().strip() == '1'
+
+        # Collect signal strenght samples
+        if self.wifi:
+            if not self.is_ready():
+                self.strenght = 0
+                self.samples.clear()
+                self.essid = None
+            else:
+                with open('/sys/class/net/'+self.ifname+'/wireless/link') as f:
+                    self.strenght = int(f.readline().strip())
+                    self.samples.append(self.strenght)
+
+                matches = re.findall('ESSID:"([^"$]+)',
+                    subproc.check_output(shlex.split('iwconfig '+ self.ifname)))
+                self.essid = matches[0].strip()
+        elif self.wired:
+            self.strenght = WIRED_UP_STRENGHT if self.state else WIRED_DOWN_STRENGHT
 
     def poll_and_notify(self):
-
         if self.remote:
             return
 
-        last_state = self.is_ready()
+        before = self.is_ready()
 
         self.poll()
 
-        if last_state != self.is_ready():
-            import pdb
-            #pdb.set_trace()
-
+        if before != self.is_ready():
             if self.is_ready() and self.on_link_up:
                 self.on_link_up(self)
 
             if not self.is_ready() and self.on_link_down:
                 self.on_link_down(self)
-    
-    def down(self):
-        if self.remote:
-            print '- Cannot set status on remote links.'
 
         if not self.is_ready():
             return
+        
+        if self.is_going_down():
+            if self.on_link_going_down:
+                self.on_link_going_down(self)
+
+    
+    def up(self):
+        assert not self.remote
+
+        if self.is_ready():
+            return True
+
+        if self.wifi:
+            subproc.call(['rfkill', 'unblock', 'all'])
+        
+        cmd = 'ip link set up dev '+self.ifname
+        success = (subproc.call(shlex.split(cmd)) == 0)
+
+        self.poll()
+
+        if not self.state:
+            return False
+
+        if self.wifi:
+            # XXX: Only one network is supported.
+            essid = WIFI_ESSID
+            key   = WIFI_KEY
+
+            cmd = ['iwconfig', self.ifname, 'essid', essid]
+
+            if key:
+                cmd.append('key')
+                cmd.append(key)
+
+            success = subproc.call(cmd) == 0
+
+        #if self.carrier:
+        util.dhcp_release(self.ifname)
+        success = util.dhcp_renew(self.ifname)
+            
+        self.poll()
+
+        if self.is_ready() and self.on_link_up:
+            self.on_link_up(self)
+
+        return True
+    
+
+    def down(self):
+        assert not self.remote
+
+        # This link is already down, nothing to do here.
+        if not self.state:
+            return True
 
         util.dhcp_release(self.ifname)
 
         cmd = shlex.split('ip addr flush dev '+self.ifname)
-        success = (subprocess.call(cmd) == 0)
+        success = (subproc.call(cmd) == 0)
 
         cmd = shlex.split('ip link set down dev '+self.ifname)
-        success = (subprocess.call(cmd) == 0)
+        success = (subproc.call(cmd) == 0)
 
         self.poll()
 
         if success and not self.is_ready() and self.on_link_down:
             self.on_link_down(self)
-
+        
         return success
-        
-    def up(self):
-        if self.remote:
-            print '- Cannot set status on remote links.'
-        
-        if self.state == 'up':
-            return True
-        
-        cmd = 'ip link set up dev '+self.ifname
+      
 
-        return (subprocess.call(shlex.split(cmd)) == 0)
+    def is_going_down(self):
+        return (self.wifi and len(self.samples) == WIFI_SAMPLES and
+                util.average(self.samples) < WIFI_THRESHOLD)
 
 
-class Link80203(Link):
-    def __init__(self, **kwargs):
-        super(Link80203, self).__init__(**kwargs)
+    def is_ready(self):
+        return (getattr(self, '_ready', False) or
+                (self.state and self.ipaddr != None))
 
-    def poll(self):
-        super(Link80203, self).poll()
+
+    def as_dict(self):
+        d = dict(self.__dict__)
 
         if self.remote:
-            return
+            d['ready'] = d['_ready']
+            del d['_ready']
 
-        if self.state == 'up':
-            with open('/sys/class/net/'+self.ifname+'/carrier') as f:
-                self.carrier = f.readline().strip() == '1'
-        else:
-            self.carrier = False
-
-    def up(self):
-        if not super(Link80203, self).up():
-            return False
-        
-        if self.is_ready():
-            return True
-
-        self.poll()
-        
-        # carrier is plugged in, just need to ask for a new ip
-        if self.carrier:
-            util.dhcp_release(self.ifname)
-            util.dhcp_renew(self.ifname)
-            
-            self.poll()
-
-            if self.is_ready() and self.on_link_up:
-                self.on_link_up(self)
-        else:
-            print '-', self.ifname+':', 'Carrier not present.'
-        
-        
-class Link80211(Link):
-    THRESHOLD = 37
-    SAMPLES   = 10
-
-    def __init__(self, **kwargs):
-        super(Link80211, self).__init__(**kwargs)
-
-        self.wireless = True
-        self.strenght  = 0
-
-        self.samples = collections.deque(maxlen=Link80211.SAMPLES)
-
-
-    def poll(self):
-        super(Link80211, self).poll()
-
-        if self.remote:
-            return
-
-        if not self.is_ready():
-            self.strenght = 0
-            self.samples.clear()
-            self.essid = None
-            return
-
-        with open('/sys/class/net/'+self.ifname+'/wireless/link') as f:
-            self.strenght = int(f.readline().strip())
-            self.samples.append(self.strenght)
-
-        self.essid = re.findall('ESSID:"([^"$]+)',
-            subprocess.check_output(shlex.split('iwconfig '+self.ifname)))[0] \
-            .strip()
-
-
-    def poll_and_notify(self):
-        if self.remote:
-            return
-
-        super(Link80211, self).poll_and_notify()
-
-        if not self.is_ready():
-            return
-
-        if len(self.samples) == Link80211.SAMPLES and util.average(self.samples) < Link80211.THRESHOLD:
-            print "Avg:",util.average(self.samples),"Sgn:",self.strenght
-
-            if self.on_link_going_down:
-                self.on_link_going_down(self)
-
-    def up(self):
-        essid = WIFI_ESSID
-        key = WIFI_KEY
-        before = self.state
-
-        subprocess.call(['rfkill', 'unblock', 'all'])
-
-        if not super(Link80211, self).up():
-            return False
-        
-        self.poll()
-
-
-        cmd = ['iwconfig', self.ifname, 'essid', essid]
-
-        if key:
-            cmd.append('key')
-            cmd.append(key)
-        success = subprocess.call(cmd) == 0
-
-        if success:
-            util.dhcp_release(self.ifname)
-            success = success and util.dhcp_renew(self.ifname)
-
-            self.poll()
-
-            #print self.is_ready()
-
-            if success and before != self.state and self.is_ready() and self.on_link_up:
-                self.on_link_up(self)
-
-        return success
-
-    def scan(self):
-
-        return {
-                'GREDES_TELEMATICA': {
-                    'nome': 'GREDES_TELEMATICA',
-                    'strenght': 60
-                    },
-                'LABIFTO': {
-                    'nome': 'LABIFTO',
-                    'strenght': 30
-                    }
-                }
+        return d
 
 

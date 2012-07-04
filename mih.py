@@ -17,7 +17,7 @@ def _client_user(link, status, links):
 
         current = mihf.current_link()
 
-        if current.is_ready():
+        if current and current.is_ready():
             return
 
         uplinks = [lnk for lnk in links if lnk.is_ready()]
@@ -30,7 +30,7 @@ def _client_user(link, status, links):
 
         for l in uplinks:
             # wired is better than everything because i said so.
-            if not l.wireless and not l.mobile:
+            if not l.wifi and not l.mobile:
                 better = l
                 break
 
@@ -45,11 +45,11 @@ def _client_user(link, status, links):
     elif status == 'up':
         current = mihf.current_link() 
         
-        # wired > wireless > mobile > None
+        # wired > wifi > mobile > None
         if (current != link and
             (not current or
             (current.mobile and not link.mobile) or
-            (current.wireless and not link.wireless))):
+            (current.wifi and not link.wifi))):
             
             if mihf.switch(link):
                 print '- Switched to', link.ifname
