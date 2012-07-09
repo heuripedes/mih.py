@@ -1,15 +1,12 @@
 # vim: ts=8 sts=4 sw=4 et ai nu
 
-# TODO: Make the scheme comply to the blueprint. (wifi should be on/scanning 
-#       when using 3g connectivity)
-
 import os
 import sys
 import socket
 import cPickle
 import resource
 import collections
-#import time
+import time
 
 from message import *
 from link import *
@@ -19,20 +16,25 @@ Peer = collections.namedtuple('Peer', 'name, addr')
 
 PAGE_SIZE = resource.getpagesize()
 
-MIHF_PORT  = 1234
+MIHF_PORT  = 12345
 MIHF_BCAST = ('255.255.255.255', MIHF_PORT)
 MIHF_ANY   = ('0.0.0.0', MIHF_PORT)
-
+MIHF_peek_TIME = 10
 
 g_name   = util.gen_id('MIHF')
+g_server = False
+
 g_links  = dict()
 g_cur_link = None
-g_server = False
+
 g_peers  = dict()
 g_sock   = None
 g_user_handler = None
 
+g_next_peek   = time.time()
+
 __all__ = ['discover', 'report', 'switch', 'serve', 'run', 'local_links', 'remote_links', 'current_link']
+
 
 def current_link():
     return g_cur_link
@@ -67,14 +69,15 @@ def switch(link):
     """Switches to another link."""
 
     global g_cur_link
+    global g_next_peek
 
     if not link.is_ready():
         link.up()
 
     if not link.is_ready():
-        #print '- switch():', 'failed to switch.'
         link.down()
         return False
+
     else:
         #print '- switch():', g_cur_link, '->', link
         
@@ -83,6 +86,10 @@ def switch(link):
 
         if old_link:
             old_link.down()
+
+        
+        if link.mobile:
+            g_next_peek = time.time() + MIHF_peek_TIME
 
         return True
 
@@ -129,6 +136,8 @@ def export_links():
 
 
 def handle_message(srcaddr, message):
+    #global g_peers
+
     msgkind = message.kind
 
     if g_server:
@@ -148,7 +157,7 @@ def handle_message(srcaddr, message):
             link_data = cPickle.loads(message.payload)
 
             for data in link_data:
-                link = make_link(**data)
+                link = Link(**data)
 
                 print '- Found remote link', link.ifname
 
@@ -175,17 +184,12 @@ def send_message(peer, kind, payload):
 
 
 def recv_message():
-    pair = util.recvfrom(g_sock)
+    data, addr = util.recvfrom(g_sock)
 
-    if pair:
-        data, addr = pair
-        message = cPickle.loads(data)
+    if not data:
+        return None, None
 
-        #print '<', addr, message.kind
-
-        return addr, message
-
-    return None, None
+    return addr, cPickle.loads(data)
 
 
 def create_socket():
@@ -204,6 +208,7 @@ def create_socket():
 
 def refresh_links():
     global g_cur_link
+    global g_next_peek
 
     has_ready_links = False
 
@@ -221,13 +226,14 @@ def refresh_links():
 
         g_links[ifname] = link
             
-        # server must have as many up links as possible
-        if g_server:
-            link.up()
 
     for ifname, link in g_links.items():
         if not ifname in dead:
             link.poll_and_notify()
+
+            # server must have as many up links as possible
+            if g_server:
+                link.up()
 
             if link.is_ready():
                 has_ready_links = True
@@ -241,7 +247,17 @@ def refresh_links():
             link.up()
 
             if link.is_ready():
+                g_cur_link = link
+
+                if link.mobile:
+                    g_next_peek = time.time() + MIHF_peek_TIME
+
                 break
+
+    # Check for available wifi links
+    if link.mobile and time.time() > g_next_peek:
+        peek_links()
+        g_next_peek = g_next_peek + MIHF_peek_TIME
 
 
 def serve(user_handler):
@@ -257,20 +273,33 @@ def run(user_handler):
     g_user_handler = lambda link, state: \
         user_handler(link, state, g_links.values())
 
-    create_socket()
+    try:
 
-    print '- Starting MIHF', g_name
+        create_socket()
 
-    if g_server:
-        print '- Server mode is on.'
+        print '- Starting MIHF', g_name
 
-    while True:
-        addr, message = recv_message()
+        if g_server:
+            print '- Server mode is on.'
 
-        if message:
-            handle_message(addr, message)
+        while True:
+            addr, message = recv_message()
 
-        refresh_links()
-        #time.sleep(0.3)
+            if message:
+                handle_message(addr, message)
+
+            refresh_links()
+            #time.sleep(0.3)
+    except Exception as e:
+        raise e
+    
+def peek_links():
+    wifi = filter(lambda link: link.wifi, g_links)
+
+    for name, link in wifi.items():
+        link.up()
+
+        if not link.is_ready():
+            link.down()
 
 

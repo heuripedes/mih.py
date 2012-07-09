@@ -35,16 +35,13 @@ def normalize(s):
 
 
 def recvfrom(sock):
-    data = None
     try:
-        data = sock.recvfrom(resource.getpagesize())
+        return sock.recvfrom(resource.getpagesize())
         #if data:
         #    print '<',data[1],len(data[0]),'bytes.'
 
     except socket.timeout:
-        pass
-
-    return data
+        return None, None
 
 
 def sendto(sock, addr, data):

@@ -1,7 +1,7 @@
 
 import os
 import collections
-import errno
+#import errno
 import shlex
 import subprocess as subproc
 import re
@@ -176,6 +176,7 @@ class Link:
     def up(self):
         assert not self.remote
 
+        print 'up?',self.is_ready()
         if self.is_ready():
             return True
 
