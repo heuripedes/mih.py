@@ -217,7 +217,7 @@ def refresh_links():
     dead = filter(lambda ifname: ifname not in ifnames, g_links.keys())
 
     for ifname in new:
-        link = Link(ifname=ifname)
+        link = make_link(ifname=ifname)
 
         link.on_link_up   = handle_link_up
         link.on_link_down = handle_link_down
@@ -272,26 +272,23 @@ def run(user_handler):
     g_user_handler = lambda link, state: \
         user_handler(link, state, g_links.values())
 
-    try:
 
-        create_socket()
+    create_socket()
 
-        print '- Starting MIHF', g_name
+    print '- Starting MIHF', g_name
 
-        if g_server:
-            print '- Server mode is on.'
+    if g_server:
+        print '- Server mode is on.'
 
-        while True:
-            addr, message = recv_message()
+    while True:
+        addr, message = recv_message()
 
-            if message:
-                handle_message(addr, message)
+        if message:
+            handle_message(addr, message)
 
-            refresh_links()
-            #time.sleep(0.3)
-    except Exception as e:
-        raise e
-    
+        refresh_links()
+        #time.sleep(0.3)
+
 def peek_links():
     wifi = filter(lambda link: link.wifi, g_links)
 
