@@ -6,6 +6,8 @@ import resource
 import math
 import subprocess
 import errno
+import shlex
+import re
 
 # from sys/socket.h
 SO_BINDTODEVICE = 25
@@ -107,5 +109,12 @@ def dhcp_renew(ifname):
     return retcode == 0
 
 def bind_sock_to_device(sock, dev = ''):
+    # TODO: use IP_PKTINFO
     sock.setsockopt(socket.SOL_SOCKET, SO_BINDTODEVICE, dev)
+
+def match_output(pattern, cmd):
+    if isinstance(cmd, str):
+        cmd = shlex.split(cmd)
+
+    return re.findall(pattern, subprocess.check_output(cmd))
 

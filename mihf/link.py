@@ -100,31 +100,12 @@ class Link:
             self.macaddr = f.readline().strip()
 
         # Link state
-        matches = re.findall('Link detected: (yes|no)',
-                subproc.check_output(['ethtool',self.ifname]))
+        matches = util.match_output('Link detected: (yes|no)', 'ethtool ' + self.ifname)
         self.state = matches and matches[0] == 'yes'
 
-        #with open('/sys/class/net/'+self.ifname+'/operstate') as f:
-        #    state = f.readline().strip()
-        #    if state == '1':
-        #        self.state = True
-        #    elif state == '0':
-        #        self.state = False
-        #    else:
-        #        self.state = None
-
         # IPv4 Address
-        matches = re.findall('inet ([^/]+)',
-                subproc.check_output(
-                    shlex.split('ip -4 -o addr show '+self.ifname)))
+        matches = util.match_output('inet ([^/]+)', 'ip -4 -o addr show '+self.ifname)
         self.ipaddr = matches[0] if matches else None
-
-        ## Fix state
-        #if self.state is None:
-        #    if not self.ipaddr is None:
-        #        self.state = False
-        #    else:
-        #        util.iface_is_up(self.ifname)
 
         # Cable
         if self.state and self.wired:
@@ -144,8 +125,7 @@ class Link:
                     self.strenght = int(f.readline().strip())
                     self.samples.append(self.strenght)
 
-                matches = re.findall('ESSID:"([^"$]+)',
-                    subproc.check_output(shlex.split('iwconfig '+ self.ifname)))
+                matches = util.match_output('ESSID:"([^"$]+)', 'iwconfig '+ self.ifname)
                 self.essid = matches[0].strip()
         elif self.wired:
             self.strenght = WIRED_UP_STRENGHT if self.state else WIRED_DOWN_STRENGHT
@@ -176,7 +156,6 @@ class Link:
     def up(self):
         assert not self.remote
 
-        print 'up?',self.is_ready()
         if self.is_ready():
             return True
 

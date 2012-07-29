@@ -51,7 +51,6 @@ def remote_links():
 def discover(iface):
     assert not g_server
 
-    # TODO: use IP_PKTINFO
     util.bind_sock_to_device(g_sock, iface.ifname)
 
     msg = Message(g_name, 'mih_discovery.request', None)
