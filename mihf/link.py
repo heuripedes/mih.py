@@ -215,7 +215,7 @@ class Link80203(Link):
         if self.is_ready():
             return True
 
-        if not super(Link80211, self).up():
+        if not super(Link80203, self).up():
             return False
 
         util.dhcp_release(self.ifname)
