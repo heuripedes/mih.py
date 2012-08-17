@@ -19,7 +19,7 @@ PAGE_SIZE = resource.getpagesize()
 MIHF_PORT  = 12345
 MIHF_BCAST = ('255.255.255.255', MIHF_PORT)
 MIHF_ANY   = ('0.0.0.0', MIHF_PORT)
-MIHF_peek_TIME = 10
+MIHF_PEEK_TIME = 10
 
 g_name   = util.gen_id('MIHF')
 g_server = False
@@ -88,10 +88,12 @@ def switch(link):
 
         
         if link.mobile:
-            g_next_peek = time.time() + MIHF_peek_TIME
+            g_next_peek = time.time() + MIHF_PEEK_TIME
 
         return True
 
+
+# TODO: merge link status change handlers into a single handler
 
 def handle_link_up(link):
     print '-', link.ifname, 'is up'
@@ -117,6 +119,7 @@ def handle_link_going_down(link):
     #if g_server:
     #    bcast_message('mih_link_going_down.indication', cPickle.dumps(link))
     
+    # TODO: request MIH_Report from the server.
     g_user_handler(link, 'going_down')
 
 
@@ -135,7 +138,7 @@ def export_links():
 
 
 def handle_message(srcaddr, message):
-    #global g_peers
+    # TODO: remove client peer list, it can only talk to one server.
 
     msgkind = message.kind
 
@@ -249,14 +252,14 @@ def refresh_links():
                 g_cur_link = link
 
                 if link.mobile:
-                    g_next_peek = time.time() + MIHF_peek_TIME
+                    g_next_peek = time.time() + MIHF_PEEK_TIME
 
                 break
 
     # Check for available wifi links
     if link.mobile and time.time() > g_next_peek:
         peek_links()
-        g_next_peek = g_next_peek + MIHF_peek_TIME
+        g_next_peek = g_next_peek + MIHF_PEEK_TIME
 
 
 def serve(user_handler):
