@@ -13,7 +13,7 @@ def _client_user(link, status, links):
 
     #print link.ifname, status
 
-    if status == 'down' or status == 'going_down':
+    if status == 'down' or status == 'going down':
 
         current = mihf.current_link()
 

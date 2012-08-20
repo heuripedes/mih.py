@@ -54,9 +54,10 @@ class Link(object):
     def __init__(self, **kwargs):
         
         # Callbacks
-        self.on_link_up         = None
-        self.on_link_down       = None
-        self.on_link_going_down = None
+        self.on_link_state_change = None
+        #self.on_link_state_change         = None
+        #self.on_link_state_change       = None
+        #self.on_link_state_change = None
 
         self.state = None # force link_up on first poll()
 
@@ -114,11 +115,11 @@ class Link(object):
         self.poll()
 
         if before != self.is_ready():
-            if self.is_ready() and self.on_link_up:
-                self.on_link_up(self)
+            if self.is_ready() and self.on_link_state_change:
+                self.on_link_state_change(self, 'up')
 
-            if not self.is_ready() and self.on_link_down:
-                self.on_link_down(self)
+            if not self.is_ready() and self.on_link_state_change:
+                self.on_link_state_change(self, 'down')
 
         if not self.is_ready():
             return
@@ -158,8 +159,8 @@ class Link(object):
 
         self.poll()
 
-        if success and not self.is_ready() and self.on_link_down:
-            self.on_link_down(self)
+        if success and not self.is_ready() and self.on_link_state_change:
+            self.on_link_state_change(self, 'down')
         
         return success
 
@@ -223,8 +224,8 @@ class Link80203(Link):
             
         self.poll()
 
-        if self.is_ready() and self.on_link_up:
-            self.on_link_up(self)
+        if self.is_ready() and self.on_link_state_change:
+            self.on_link_state_change(self, 'up')
         
         return success and self.is_ready()
 
@@ -276,8 +277,8 @@ class Link80211(Link):
             return
         
         if self.is_going_down():
-            if self.on_link_going_down:
-                self.on_link_going_down(self)
+            if self.on_link_state_change:
+                self.on_link_state_change(self, 'going down')
 
 
     def up(self):
@@ -307,8 +308,8 @@ class Link80211(Link):
             
         self.poll()
 
-        if self.is_ready() and self.on_link_up:
-            self.on_link_up(self)
+        if self.is_ready() and self.on_link_state_change:
+            self.on_link_state_change(self, 'up')
         
         return success and self.is_ready()
 

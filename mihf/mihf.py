@@ -97,36 +97,10 @@ def switch(link):
         return True
 
 
-# TODO: merge link status change handlers into a single handler
+def handle_link_state_change(link, state):
+    logger.info('Link %s is %s', link.ifname, state)
 
-def handle_link_up(link):
-    logger.info('Link %s is up', link.ifname)
-
-    #if g_server:
-    #    bcast_message('mih_link_up.indication', cPickle.dumps(link))
-
-    g_user_handler(link, 'up')
-
-
-def handle_link_down(link):
-    logger.info('Link %s is down', link.ifname)
-
-    #if g_server:
-    #    bcast_message('mih_link_down.indication', cPickle.dumps(link))
-
-    g_user_handler(link, 'down')
-
-
-def handle_link_going_down(link):
-    logger.info('Link %s is going down. Str: %i Avg. Str: %f Thold: %i', 
-            link.ifname, link.strenght, util.average(link.samples), 
-            WIFI_THRESHOLD)
-
-    #if g_server:
-    #    bcast_message('mih_link_going_down.indication', cPickle.dumps(link))
-    
-    # TODO: request MIH_Report from the server.
-    g_user_handler(link, 'going_down')
+    g_user_handler(link, state)
 
 
 def export_links():
@@ -229,9 +203,10 @@ def refresh_links():
     for ifname in new:
         link = make_link(ifname=ifname)
 
-        link.on_link_up   = handle_link_up
-        link.on_link_down = handle_link_down
-        link.on_link_going_down = handle_link_going_down
+        link.on_link_state_change = handle_link_state_change
+        #link.on_link_up   = handle_link_up
+        #link.on_link_down = handle_link_down
+        #link.on_link_going_down = handle_link_going_down
 
         g_links[ifname] = link
             
