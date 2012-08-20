@@ -55,9 +55,6 @@ class Link(object):
         
         # Callbacks
         self.on_link_state_change = None
-        #self.on_link_state_change         = None
-        #self.on_link_state_change       = None
-        #self.on_link_state_change = None
 
         self.state = None # force link_up on first poll()
 

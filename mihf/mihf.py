@@ -204,9 +204,6 @@ def refresh_links():
         link = make_link(ifname=ifname)
 
         link.on_link_state_change = handle_link_state_change
-        #link.on_link_up   = handle_link_up
-        #link.on_link_down = handle_link_down
-        #link.on_link_going_down = handle_link_going_down
 
         g_links[ifname] = link
             
