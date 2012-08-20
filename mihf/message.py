@@ -2,6 +2,9 @@
 
 import collections
 
+# TODO: generate/store message ids for each request
+# TODO: store discovery responses
+
 Message = collections.namedtuple('Message', 'source, kind, payload')
 
 #class Message(MessageBase):
