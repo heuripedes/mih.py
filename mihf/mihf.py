@@ -8,6 +8,10 @@ import resource
 import collections
 import time
 
+import logging 
+logger = logging#logging.getLogger()
+logger.basicConfig(format='(%(filename)s:%(lineno)d) %(levelname)s: %(message)s',level=logging.DEBUG)#logger.setLevel(logging.INFO)
+
 from message import *
 from link import *
 import util
@@ -96,7 +100,7 @@ def switch(link):
 # TODO: merge link status change handlers into a single handler
 
 def handle_link_up(link):
-    print '-', link.ifname, 'is up'
+    logger.info('Link %s is up', link.ifname)
 
     #if g_server:
     #    bcast_message('mih_link_up.indication', cPickle.dumps(link))
@@ -105,7 +109,7 @@ def handle_link_up(link):
 
 
 def handle_link_down(link):
-    print '-', link.ifname, 'is down'
+    logger.info('Link %s is down', link.ifname)
 
     #if g_server:
     #    bcast_message('mih_link_down.indication', cPickle.dumps(link))
@@ -114,7 +118,9 @@ def handle_link_down(link):
 
 
 def handle_link_going_down(link):
-    print '-', link.ifname, 'is going down. signal:',link.strenght,'average:',util.average(link.samples)
+    logger.info('Link %s is going down. Str: %i Avg. Str: %f Thold: %i', 
+            link.ifname, link.strenght, util.average(link.samples), 
+            WIFI_THRESHOLD)
 
     #if g_server:
     #    bcast_message('mih_link_going_down.indication', cPickle.dumps(link))
@@ -144,7 +150,8 @@ def handle_message(srcaddr, message):
 
     if g_server:
         if msgkind == 'mih_discovery.request':
-            print '- Found new peer:', message.source
+            logger.info('New peer found: %s', message.source)
+
             p = Peer(message.source, srcaddr)
 
             g_peers[message.source] = p
@@ -154,14 +161,14 @@ def handle_message(srcaddr, message):
 
     else:
         if msgkind == 'mih_discovery.response':
-            print '- Found server:', message.source
+            logger.info('Server found: %s', message.source)
 
             link_data = cPickle.loads(message.payload)
 
             for data in link_data:
                 link = Link(**data)
 
-                print '- Found remote link', link.ifname
+                logger.info('Remote link found: %s', link.ifname)
 
             g_peers[message.source] = Peer(message.source, srcaddr)
 
@@ -244,7 +251,7 @@ def refresh_links():
 
     # try to turn something up
     if not has_ready_links:
-        print "- No up link found, trying to activate one."
+        logger.warning('No active link found, trying to activate one.')
         for name, link in g_links.items():
             link.up()
 
@@ -278,10 +285,8 @@ def run(user_handler):
 
     create_socket()
 
-    print '- Starting MIHF', g_name
-
-    if g_server:
-        print '- Server mode is on.'
+    logger.info('Starting MIHF %s', g_name)
+    logger.info('Server mode is %s', 'on' if g_server else 'off')
 
     while True:
         addr, message = recv_message()
