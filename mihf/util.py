@@ -17,7 +17,7 @@ def gen_id(name):
     :return name+random hex number
     """
 
-    return (name.strip() + '-' + str(os.urandom(4)).encode('hex_codec')).upper()
+    return (name.strip() + str(os.urandom(4)).encode('hex_codec')).upper()
 
 
 def average(samples):

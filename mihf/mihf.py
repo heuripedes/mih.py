@@ -24,7 +24,7 @@ __all__ = ['discover', 'report', 'switch', 'serve', 'run', 'local_links', 'remot
 
 class MihfState(object):
     def __init__(self):
-        self.name   = util.gen_id('MIHF')
+        self.name   = util.gen_id('MIHF-')
         self.server = False
         self.links  = dict()
         self.cur_link = None
@@ -54,7 +54,8 @@ def discover(iface):
 
     msg = Message(g.name, 'mih_discovery.request', None)
 
-    util.sendto(g.sock, (socket.INADDR_BROADCAST, MIHF_PORT), cPickle.dumps(msg))
+    #util.sendto(g.sock, (socket.INADDR_BROADCAST, MIHF_PORT), cPickle.dumps(msg))
+    util.sendto(g.sock, ('<broadcast>', MIHF_PORT), cPickle.dumps(msg))
 
     util.bind_sock_to_device(g.sock, '')
 
@@ -172,7 +173,8 @@ def create_socket():
     g.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     if g.server:
-        g.sock.bind(('0.0.0.0', MIHF_PORT))
+        #g.sock.bind((socket.INADDR_ANY, MIHF_PORT))
+        g.sock.bind(('', MIHF_PORT))
 
     g.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
     g.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, True)
