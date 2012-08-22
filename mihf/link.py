@@ -1,4 +1,7 @@
 
+# TODO: find a way to use SIOCETHTOOL ioctl instea of ethtool
+# TODO: minimize CPU usage
+
 import os
 import collections
 #import errno
@@ -85,22 +88,31 @@ class Link(object):
             self.ipaddr  = kwargs.pop('ipaddr', None)
             self.state    =  kwargs.pop('state', False)
 
+        else:
+            self._poll_mac()
+
+    def _poll_mac(self):
+        with open('/sys/class/net/'+self.ifname+'/address') as f:
+            self.macaddr = f.readline().strip()
+
+
+    def _poll_ipv4(self):
+        matches = util.match_output('inet ([^/]+)', 'ip -4 -o addr show '+self.ifname)
+        self.ipaddr = matches[0] if matches else None
+
 
     def poll(self):
         if self.remote:
             return
 
-        # MAC address
-        with open('/sys/class/net/'+self.ifname+'/address') as f:
-            self.macaddr = f.readline().strip()
+        before = self.state
 
         # Link state
         matches = util.match_output('Link detected: (yes|no)', 'ethtool ' + self.ifname)
         self.state = matches and matches[0] == 'yes'
 
-        # IPv4 Address
-        matches = util.match_output('inet ([^/]+)', 'ip -4 -o addr show '+self.ifname)
-        self.ipaddr = matches[0] if matches else None
+        if before != self.state:
+            self._poll_ipv4()
 
 
     def poll_and_notify(self):
@@ -170,7 +182,7 @@ class Link(object):
     def as_dict(self):
         d = dict(self.__dict__)
 
-        if self.remote:
+        if self.remote and hasattr(d, '_ready'):
             d['ready'] = d['_ready']
             del d['_ready']
 
@@ -189,18 +201,20 @@ class Link80203(Link):
     def update(self, *args, **kwargs):
         super(Link80203, self).update(*args, **kwargs)
 
-        if self.remote:
-            self.carrier = kwargs.pop('carrier', False)
+        #if self.remote:
+        #    self.carrier = kwargs.pop('carrier', False)
 
 
     def poll(self):
+
         super(Link80203, self).poll()
 
         if self.state:
-            # XXX: one exception might originate here if the interface
-            #      goes down before the read completes.
-            with open('/sys/class/net/'+self.ifname+'/carrier') as f:
-                self.carrier = f.readline().strip() == '1'
+            # XXX: is the carrier information really needed?
+            ## XXX: one exception might originate here if the interface
+            ##      goes down before the read completes.
+            #with open('/sys/class/net/'+self.ifname+'/carrier') as f:
+            #    self.carrier = f.readline().strip() == '1'
             
             self.strenght = WIRED_UP_STRENGHT
         else:

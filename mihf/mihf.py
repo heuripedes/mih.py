@@ -54,8 +54,8 @@ def discover(iface):
 
     msg = Message(g.name, 'mih_discovery.request', None)
 
-    #util.sendto(g.sock, (socket.INADDR_BROADCAST, MIHF_PORT), cPickle.dumps(msg))
-    util.sendto(g.sock, ('<broadcast>', MIHF_PORT), cPickle.dumps(msg))
+    #util.sendto(g.sock, (socket.INADDR_BROADCAST, MIHF_PORT), msg.pickle())
+    util.sendto(g.sock, ('<broadcast>', MIHF_PORT), msg.pickle())
 
     util.bind_sock_to_device(g.sock, '')
 
@@ -100,13 +100,13 @@ def handle_link_state_change(link, state):
 def export_links():
     """Returns a list of link data suitable for remote use."""
 
-    links = list(g.links.values())
+    links = []
 
-    for link in links:
-        link.remote = True
-        link.ifname = link.ifname + '@' + g.name
-
-    links = map(lambda link: link.data(), links)
+    for l in g.links.values():
+        link = l.as_dict()
+        link['remote'] = True
+        link['ifname'] = l.ifname + '@' + g.name
+        links.append(link)
 
     return links
 
@@ -118,36 +118,37 @@ def handle_message(srcaddr, message):
 
     if g.server:
         if msgkind == 'mih_discovery.request':
-            logger.info('New peer found: %s', message.source)
+            logger.info('New peer found: %s', message.src)
 
-            p = Peer(message.source, srcaddr)
+            p = Peer(message.src, srcaddr)
 
-            g.peers[message.source] = p
+            g.peers[message.src] = p
 
-            send_message(p, 'mih_discovery.response',
-                    cPickle.dumps(export_links()))
+            #send_message(p, 'mih_discovery.response',
+            #        cPickle.dumps(export_links()))
+            send_message(p, 'mih_discovery.response', export_links())
 
     else:
         if msgkind == 'mih_discovery.response':
-            logger.info('Server found: %s', message.source)
 
-            link_data = cPickle.loads(message.payload)
+            if message.src not in g.peers:
+                logger.info('New server found: %s', message.src)
 
-            for data in link_data:
-                link = Link(**data)
+                for data in message.payload:
+                    link = Link(**data)
 
-                logger.info('Remote link found: %s', link.ifname)
+                    logger.info('Remote link found: %s', link.ifname)
 
-            g.peers[message.source] = Peer(message.source, srcaddr)
+                g.peers[message.src] = Peer(message.src, srcaddr)
 
         #if msgkind == 'mih_link_up.indication':
-        #    print '-', cPickle.loads(message.payload).ifname, 'at', message.source, 'is now up.'
+        #    print '-', cPickle.loads(message.payload).ifname, 'at', message.src, 'is now up.'
 
         #if msgkind == 'mih_link_down.indication':
-        #    print '-', cPickle.loads(message.payload).ifname, 'at', message.source, 'is now down.'
+        #    print '-', cPickle.loads(message.payload).ifname, 'at', message.src, 'is now down.'
 
         #if msgkind == 'mih_link_going_down.indication':
-        #    print '-', cPickle.loads(message.payload).ifname, 'at', message.source, 'is going down.'
+        #    print '-', cPickle.loads(message.payload).ifname, 'at', message.src, 'is going down.'
 
 
 def bcast_message(kind, payload):
@@ -155,9 +156,11 @@ def bcast_message(kind, payload):
         send_message(peer, kind, payload)
 
 
+# TODO: use Message's parent field
 def send_message(peer, kind, payload):
-    m = Message(g.name, kind, payload)
-    util.sendto(g.sock, peer.addr, cPickle.dumps(m))
+    m = Message(g.name, kind, payload, dst=peer.name)
+    print m
+    util.sendto(g.sock, peer.addr, m.pickle())
 
 
 def recv_message():
@@ -205,7 +208,7 @@ def refresh_links():
             link.poll_and_notify()
 
             # server must have as many up links as possible
-            if g.server:
+            if g.server and not link.remote:
                 link.up()
 
             if link.is_ready():
@@ -252,11 +255,12 @@ def run(user_handler):
 
     while True:
         addr, message = recv_message()
-
+        
         if message:
             handle_message(addr, message)
 
         refresh_links()
+
         #time.sleep(0.3)
 
 def peek_links():
