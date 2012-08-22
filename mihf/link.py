@@ -149,8 +149,8 @@ class Link(object):
         self.poll()
 
         return self.state
-    
 
+    
     def down(self):
         assert not self.remote
 

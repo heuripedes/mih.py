@@ -9,7 +9,7 @@ import pickletools
 
 class Message(object):
 
-    def __init__(self, src, kind, payload, dst=None, parent=None):
+    def __init__(self, src, kind, payload=None, dst=None, parent=None):
         super(Message, self).__init__()
 
         self.id = util.gen_id('')

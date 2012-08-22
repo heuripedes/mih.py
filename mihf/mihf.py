@@ -52,7 +52,7 @@ def discover(iface):
 
     util.bind_sock_to_device(g.sock, iface.ifname)
 
-    msg = Message(g.name, 'mih_discovery.request', None)
+    msg = Message(g.name, 'mih_discovery.request')
 
     #util.sendto(g.sock, (socket.INADDR_BROADCAST, MIHF_PORT), msg.pickle())
     util.sendto(g.sock, ('<broadcast>', MIHF_PORT), msg.pickle())
@@ -66,29 +66,20 @@ def report():
 
 def switch(link):
     """Switches to another link."""
-
-
-    if not link.is_ready():
-        link.up()
-
-    if not link.is_ready():
+    
+    if not link.up():
         link.down()
         return False
+    
+    if g.cur_link:
+        g.cur_link.down()
+    
+    if link.mobile:
+        g.next_peek = time.time() + MIHF_PEEK_TIME
 
-    else:
-        #print '- switch():', g.cur_link, '->', link
-        
-        old_link = g.cur_link
-        g.cur_link = link
+    g.cur_link = link
 
-        if old_link:
-            old_link.down()
-
-        
-        if link.mobile:
-            g.next_peek = time.time() + MIHF_PEEK_TIME
-
-        return True
+    return True
 
 
 def handle_link_state_change(link, state):
