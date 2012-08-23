@@ -128,7 +128,7 @@ def handle_message(srcaddr, message):
                 for data in message.payload:
                     link = Link(**data)
 
-                    logger.info('Remote link found: %s', link.ifname)
+                    logger.info('Remote link found: %s', link)
 
                 g.peers[message.src] = Peer(message.src, srcaddr)
 
@@ -150,7 +150,6 @@ def bcast_message(kind, payload):
 # TODO: use Message's parent field
 def send_message(peer, kind, payload):
     m = Message(g.name, kind, payload, dst=peer.name)
-    print m
     util.sendto(g.sock, peer.addr, m.pickle())
 
 

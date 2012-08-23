@@ -64,6 +64,11 @@ class Link(object):
         self.update(**kwargs)
         #self.poll()
 
+    
+    def __repr__(self):
+        return '%s(name=%s, ipv4=%s)' %\
+                (self.__class__.__name__, self.ifname, self.ipaddr)
+
 
     def update(self, *args, **kwargs):
         if not kwargs:
@@ -110,6 +115,8 @@ class Link(object):
         # Link state
         matches = util.match_output('Link detected: (yes|no)', 'ethtool ' + self.ifname)
         self.state = matches and matches[0] == 'yes'
+        #matches = util.match_output('state (UP|DOWN)', 'ip addr show dev ' + self.ifname)
+        #self.state = matches and matches[0] == 'UP'
 
         if before != self.state:
             self._poll_ipv4()
