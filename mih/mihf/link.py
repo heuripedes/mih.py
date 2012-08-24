@@ -1,7 +1,4 @@
 
-# TODO: find a way to use SIOCETHTOOL ioctl instea of ethtool
-# TODO: minimize CPU usage
-
 import os
 import collections
 #import errno
@@ -9,6 +6,10 @@ import shlex
 import subprocess as subproc
 import re
 import util
+
+import sockios
+
+sockios.init()
 
 WIRED_UP_STRENGHT   = 1000
 WIRED_DOWN_STRENGHT = 0
@@ -25,16 +26,17 @@ def get_local_ifnames():
     Looks for links in /proc/net/dev
     """
 
-    ifnames  = []
+    
     prefixes = ('lo', 'virbr', 'vboxnet')
+    ifnames  = filter(lambda name: not name.startswith(prefixes), sockios.get_iflist())
 
-    with open('/proc/net/dev') as f:
-        for line in f:
-            if line.count('|') < 1:
-                ifname = line.strip().split(':')[0]
+    # with open('/proc/net/dev') as f:
+    #     for line in f:
+    #         if line.count('|') < 1:
+    #             ifname = line.strip().split(':')[0]
 
-                if not ifname.startswith(prefixes):
-                    ifnames.append(ifname)
+    #             if not ifname.startswith(prefixes):
+    #                 ifnames.append(ifname)
 
     return ifnames
 
@@ -57,7 +59,7 @@ class Link(object):
     def __init__(self, **kwargs):
         
         # Callbacks
-        self.on_link_state_change = None
+        self.on_link_event = None
 
         self.state = None # force link_up on first poll()
 
@@ -113,10 +115,12 @@ class Link(object):
         before = self.state
 
         # Link state
-        matches = util.match_output('Link detected: (yes|no)', 'ethtool ' + self.ifname)
-        self.state = matches and matches[0] == 'yes'
+        #matches = util.match_output('Link detected: (yes|no)', 'ethtool ' + self.ifname)
+        #self.state = matches and matches[0] == 'yes'
         #matches = util.match_output('state (UP|DOWN)', 'ip addr show dev ' + self.ifname)
         #self.state = matches and matches[0] == 'UP'
+
+        self.state = sockios.is_up(self.ifname)
 
         if before != self.state:
             self._poll_ipv4()
@@ -130,16 +134,14 @@ class Link(object):
 
         self.poll()
 
-        if before != self.is_ready():
-            if self.is_ready() and self.on_link_state_change:
-                self.on_link_state_change(self, 'up')
+        is_ready = self.is_ready()
 
-            if not self.is_ready() and self.on_link_state_change:
-                self.on_link_state_change(self, 'down')
+        if before != is_ready:
+            if is_ready and self.on_link_event:
+                self.on_link_event(self, 'up')
 
-        if not self.is_ready():
-            return
-        
+            if not is_ready and self.on_link_event:
+                self.on_link_event(self, 'down')
     
     def up(self):
         assert not self.remote
@@ -147,15 +149,14 @@ class Link(object):
         if self.is_ready():
             return True
 
-        if self.wifi:
-            subproc.call(['rfkill', 'unblock', 'all'])
+        #cmd = 'ip link set up dev '+self.ifname
+        #success = (subproc.call(shlex.split(cmd)) == 0)
         
-        cmd = 'ip link set up dev '+self.ifname
-        success = (subproc.call(shlex.split(cmd)) == 0)
+        sockios.set_up(self.ifname)
 
         self.poll()
 
-        return self.state
+        return success and self.state
 
     
     def down(self):
@@ -175,23 +176,25 @@ class Link(object):
 
         self.poll()
 
-        if success and not self.is_ready() and self.on_link_state_change:
-            self.on_link_state_change(self, 'down')
+        if success and not self.is_ready() and self.on_link_event:
+            self.on_link_event(self, 'down')
         
         return success
 
 
     def is_ready(self):
         return (getattr(self, '_ready', False) or
-                (self.state and self.ipaddr != None))
+                (self.state and self.ipaddr is not None))
 
 
     def as_dict(self):
-        d = dict(self.__dict__)
+        d = self.__dict__.copy()
 
         if self.remote and hasattr(d, '_ready'):
             d['ready'] = d['_ready']
             del d['_ready']
+
+        del d['on_link_event']
 
         return d
 
@@ -242,8 +245,8 @@ class Link80203(Link):
             
         self.poll()
 
-        if self.is_ready() and self.on_link_state_change:
-            self.on_link_state_change(self, 'up')
+        if self.is_ready() and self.on_link_event:
+            self.on_link_event(self, 'up')
         
         return success and self.is_ready()
 
@@ -295,8 +298,8 @@ class Link80211(Link):
             return
         
         if self.is_going_down():
-            if self.on_link_state_change:
-                self.on_link_state_change(self, 'going down')
+            if self.on_link_event:
+                self.on_link_event(self, 'going down')
 
 
     def up(self):
@@ -326,10 +329,12 @@ class Link80211(Link):
             
         self.poll()
 
-        if self.is_ready() and self.on_link_state_change:
-            self.on_link_state_change(self, 'up')
+        success = success and self.is_ready()
+
+        if success and self.on_link_event:
+            self.on_link_event(self, 'up')
         
-        return success and self.is_ready()
+        return success
 
 
     def is_going_down(self):

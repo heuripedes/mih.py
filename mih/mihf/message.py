@@ -1,8 +1,6 @@
 # vim: ts=8 sts=4 sw=4 et ai nu
 
 import util
-import cPickle
-import pickletools
 
 # TODO: generate/store message ids for each request
 # TODO: store discovery responses
@@ -19,19 +17,22 @@ class Message(object):
         self.dst = dst
         self.payload = payload
 
-    def __getstate__(self):
-        return self.__dict__
-
     def __repr__(self):
         return 'Message(id=%s, parent=%s, kind=%s, src=%s, dst=%s, payload=%s)'\
                 % (self.id, self.parent, self.kind, self.src, self.dst, self.payload)
 
-    def pickle(self):
-        return pickletools.optimize(cPickle.dumps(self))
+    def __getstate__(self):
+        dict = self.__dict__.copy()
+        for k, v in dict.items():
+            if k.startswith('_'):
+                del dict[k]
 
-    @staticmethod
-    def unpickle(pickledmsg):
-        return cPickle.loads(pickledmsg)
+        return dict
+
+    def __setstate__(self, dict):
+        self.__dict__.update(dict)
+
+
 
     #def __getitem__(self, key):
     #    keys = ['id', 'parent', 'kind', 'src', 'dst', 'payload']

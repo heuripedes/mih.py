@@ -3,21 +3,23 @@
 import os
 import socket
 import resource
-import math
 import subprocess
 import errno
 import shlex
 import re
 
+import cPickle
+import pickletools
+
 # from sys/socket.h
 SO_BINDTODEVICE = 25
 
-def gen_id(name):
+def gen_id(prefix=''):
     """
-    :return name+random hex number
+    :return prefix+random hex number
     """
 
-    return (name.strip() + str(os.urandom(4)).encode('hex_codec')).upper()
+    return (prefix + str(os.urandom(4)).encode('hex_codec')).upper()
 
 
 def average(samples):
@@ -30,6 +32,14 @@ def average(samples):
             total = total + sample
 
     return total / count
+
+
+def unpickle(pickled):
+    return cPickle.loads(pickled)
+
+
+def pickle(object):
+    return pickletools.optimize(cPickle.dumps(object))
 
 
 def normalize(s):
