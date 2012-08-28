@@ -1,136 +1,17 @@
 # vim: ts=8 sts=4 sw=4 et ai nu
 
-
-
-# def switch(link):
-#     """Switches to another link."""
-    
-#     if not link.up():
-#         link.down()
-#         return False
-    
-#     if g.cur_link:
-#         g.cur_link.down()
-    
-#     if link.mobile:
-#         g.next_peek = time.time() + MIHF_PEEK_TIME
-
-#     g.cur_link = link
-
-#     return True
-
-
-
-# def handle_message(srcaddr, message):
-#     # TODO: remove client peer list, it can only talk to one server.
-
-#     msgkind = message.kind
-
-#     if g.server:
-#         if msgkind == 'mih_discovery.request':
-#             logger.info('New peer found: %s', message.src)
-
-#             p = Peer(message.src, srcaddr)
-
-#             g.peers[message.src] = p
-
-#             #send_message(p, 'mih_discovery.response',
-#             #        cPickle.dumps(export_links()))
-#             send_message(p, 'mih_discovery.response', export_links())
-
-#     else:
-#         if msgkind == 'mih_discovery.response':
-
-#             if message.src not in g.peers:
-#                 logger.info('New server found: %s', message.src)
-
-#                 for data in message.payload:
-#                     link = Link(**data)
-
-#                     logger.info('Remote link found: %s', link)
-
-#                 g.peers[message.src] = Peer(message.src, srcaddr)
-
-#         #if msgkind == 'mih_link_up.indication':
-#         #    print '-', cPickle.loads(message.payload).ifname, 'at', message.src, 'is now up.'
-
-#         #if msgkind == 'mih_link_down.indication':
-#         #    print '-', cPickle.loads(message.payload).ifname, 'at', message.src, 'is now down.'
-
-#         #if msgkind == 'mih_link_going_down.indication':
-#         #    print '-', cPickle.loads(message.payload).ifname, 'at', message.src, 'is going down.'
-
-
-# def refresh_links():
-
-#     has_ready_links = False
-
-#     ifnames = get_local_ifnames()
-
-#     new  = filter(lambda ifname: ifname not in g.links, ifnames)
-#     dead = filter(lambda ifname: ifname not in ifnames, g.links.keys())
-
-#     for ifname in new:
-#         link = make_link(ifname=ifname)
-
-#         link.on_link_event = handle_link_state_change
-
-#         g.links[ifname] = link
-            
-
-#     for ifname, link in g.links.items():
-#         if not ifname in dead:
-#             link.poll_and_notify()
-
-#             # server must have as many up links as possible
-#             if g.server and not link.remote:
-#                 link.up()
-
-#             if link.is_ready():
-#                 has_ready_links = True
-#         else:
-#             del g.links[ifname]
-
-#     # try to turn something up
-#     if not has_ready_links:
-#         logger.warning('No active link found, trying to activate one.')
-#         for name, link in g.links.items():
-#             link.up()
-
-#             if link.is_ready():
-#                 g.cur_link = link
-
-#                 if link.mobile:
-#                     g.next_peek = time.time() + MIHF_PEEK_TIME
-
-#                 break
-
-#     # Check for available wifi links
-#     if link.mobile and time.time() > g.next_peek:
-#         peek_links()
-#         g.next_peek = g.next_peek + MIHF_PEEK_TIME
-
-
-# def peek_links():
-#     wifi = filter(lambda link: link.wifi, g.links)
-
-#     for name, link in wifi.items():
-#         link.up()
-
-#         if not link.is_ready():
-#             link.down()
-
-
 import time
 import socket
 import select
-
 import logging 
+import errno
 
+import collections
 
 import util
 from link import *
 from message import Message
+
 
 class BasicMihf(object):
     """This class describes the common operations that all MIHFs classes 
@@ -165,7 +46,7 @@ class BasicMihf(object):
 
 
 class LocalMihf(BasicMihf):
-    def __init__(self, handler, port=12345, peek_time=10):
+    def __init__(self, handler, port=12345, peek_time=10, msg_size=8192, max_recv=10):
         super(LocalMihf, self).__init__()
 
         self._name    = util.gen_id('MIHF-')
@@ -177,6 +58,14 @@ class LocalMihf(BasicMihf):
         self._port    = port
         self._next_peek = time.time()
         self._peek_time = peek_time
+        self._msg_size = 4096
+        self._max_recv = max_recv
+
+        self._next_refresh = time.time()-1
+        self._ready_cache  = list()
+
+        self._oqueue = collections.deque()
+        self._iqueue = collections.deque()
 
 
     def discover(self, link):
@@ -186,7 +75,7 @@ class LocalMihf(BasicMihf):
 
         util.bind_sock_to_device(self._sock, link)
     
-        self._send(('<broadcast>', self._port), 'mih_discovery.request')
+        self._send(None, 'mih_discovery.request', daddr=('<broadcast>', self._port))
 
         util.bind_sock_to_device(self._sock, '')
 
@@ -219,43 +108,81 @@ class LocalMihf(BasicMihf):
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, True)
 
-        self._sock.setblocking(blocking)
+        # XXX: using select() with blocking sockets lowers the CPU usage for
+        #      some reason.
+
+        #self._sock.setblocking(blocking)
         self._sock.settimeout(timeout)
-        
-    
-    def _send(self, dest, kind, payload=None, parent=None):
-        """Sends a message to *dest*.
-        
-        *dest* is an *(host, port)* tuple. Alternatively, *dest* can be a 
-        string with the peer name.
-        
-        *kind*, *payload* and *parent* are passed to the Message class 
-        constructor."""
 
-        assert isinstance(dest, tuple) or isinstance(dest, str)
+    def _send(self, dmihf, kind, payload=None, parent=None, daddr=None, link=None):
+        """Put a message on the output queue."""
 
-        msg = Message(self._name, kind, payload, parent=parent)
+        assert daddr or (not daddr and dmihf)
 
-        if isinstance(dest, str):
-            dest = self._peers[dest].addr
+        if not daddr:
+            daddr = self._peers[dmihf]
 
-        msg.parent = parent
+        msg = Message(
+                smihf=self._name, dmihf=dmihf,
+                kind=kind, payload=payload, parent=parent,
+                daddr=daddr
+                )
 
-        util.sendto(self._sock, dest, util.pickle(msg))
+        self._oqueue.append((link, msg))
 
-    
     def _receive(self):
-        """Attempts to read a message from the socket."""
-        
-        if not select.select([self._sock],[],[], 0):
-            return None, None
-        
-        data, addr = util.recvfrom(self._sock)
+        while self._iqueue:
+            yield self._iqueue.pop()
 
-        if not data:
-            return None, None
+    def _flush_buffer(self):
+        """Flushes the output queue into the socket."""
 
-        return addr, util.unpickle(data)
+        while self._oqueue:
+            link, msg = self._oqueue.pop()
+
+            if link:
+                util.bind_sock_to_device(self._sock, link)
+
+            sent = 0
+            attempts = 4
+            
+            while not sent and attempts:
+                try: 
+                    data = util.pickle(msg).ljust(self._msg_size, '\x00')
+                    sent += self._sock.sendto(data, 0, msg.daddr)
+
+                except socket.timeout:
+                    attempts -= 1
+                    pass
+
+            if not attempts:
+                logging.warning('Failed to send message to %s: too many timeouts', msg.daddr)
+            
+            if link:
+                util.bind_sock_to_device(self._sock, '')
+
+
+    def _fill_buffer(self):
+        """Fills the input queue."""
+
+        count = self._max_recv
+
+        while count:
+            
+            data, addr = '', (None, None)
+
+            try:
+                data, addr = self._sock.recvfrom(self._msg_size)
+            except socket.timeout:
+                break
+
+            data = data.rstrip('\x00')
+            
+            if data:
+                msg = util.unpickle(data)
+                count -= 1
+
+            self._iqueue.append((addr, msg))
 
 
     def _handle_message(self, srcaddr, msg):
@@ -286,15 +213,19 @@ class LocalMihf(BasicMihf):
         return exported
 
     def _refresh_links(self):
-        
+        """Refreshes the MIHF link list."""
+       
+        if self._next_refresh < time.time():
+            self._next_refresh = time.time() + 0.5 # 500 ms
+        else:
+            return self._ready_cache
+
         llnames = get_local_ifnames()
         new  = list(set(llnames) - set(self._links.keys()))
         dead = list(set(self._links.keys()) - set(llnames))
 
-        print 'local ifnames',llnames
-        
         for name in dead:
-            # TODO: send link down?
+            # NOTE: send link down?
             del self._links[name]
 
         for name in new:
@@ -313,17 +244,28 @@ class LocalMihf(BasicMihf):
         on_mobile = self._curlink and self._curlink.mobile 
 
         if on_mobile and time.time() > self._next_peek:
-            self.peek_links()
+            self._peek_links()
             self._next_peek += self._peek_time
+
+        self._ready_cache = ready
 
         return ready
 
-    def peek_links(self):
+    def _peek_links(self):
         wifi = filter(lambda link: link.wifi, g.links)
 
         for name, link in wifi.items():
             if not link.up():
                 link.down()
+
+    def _proccess_messages(self):
+        #addr, msg = self._receive()
+        #if msg:
+        #    self._handle_message(addr, msg)
+            
+        for addr, msg in self._receive():
+            self._handle_message(addr, msg)
+
 
 
 class RemoteMihf(BasicMihf):
@@ -361,10 +303,8 @@ class ClientMihf(LocalMihf):
         self._make_socket()
 
         while True:
-            addr, msg = self._receive()
-
-            if msg:
-                self._handle_message(addr, msg)
+            self._fill_buffer()
+            self._proccess_messages()
 
             ready = self._refresh_links()
 
@@ -373,22 +313,24 @@ class ClientMihf(LocalMihf):
                     if self.switch(link):
                         break
 
+            self._flush_buffer()
+
 
     def _handle_message(self, srcaddr, msg):
-
+        
         if msg.kind == 'mih_discovery.response':
-            if msg.src in self._peers:
+            if msg.smihf in self._peers:
                 return
 
-            logging.info('New server found: %s', msg.src)
+            logging.info('New server found: %s', msg.smihf)
            
-            peer = RemoteMihf(msg.src, srcaddr)
+            peer = RemoteMihf(msg.smihf, srcaddr)
             peer.import_links(msg.payload)
 
             for link in peer.links:
                 logging.info('Remote link found: %s', link)
 
-            self._peers[msg.src] = peer
+            self._peers[msg.smihf] = peer
 
 
 class ServerMihf(LocalMihf):
@@ -407,10 +349,8 @@ class ServerMihf(LocalMihf):
         self._make_socket(bind=True)
 
         while True:
-            addr, msg = self._receive()
-
-            if msg:
-                self._handle_message(addr, msg)
+            self._fill_buffer()
+            self._proccess_messages()
 
             ready = self._refresh_links()
 
@@ -418,17 +358,19 @@ class ServerMihf(LocalMihf):
                 for link in (set(self._links.values()) ^ set(ready)):
                     link.up()
 
+            self._flush_buffer()
+
 
     def _handle_message(self, srcaddr, msg):
+        
         if msg.kind == 'mih_discovery.request':
-            if msg.src in self._peers:
-                return
-
-            logging.info('New client found: %s', msg.src)
+            if msg.smihf not in self._peers:
+                logging.info('New client found: %s', msg.smihf)
+                self._peers[msg.smihf] = RemoteMihf(msg.smihf, srcaddr)
             
             # Server does not care about client links.
-            peer = RemoteMihf(msg.src, srcaddr)
-            self._peers[msg.src] = peer
+            
+            self._send(msg.smihf, 'mih_discovery.response',
+                    self._export_links(), parent=msg.id, daddr=srcaddr)
 
-            self._send(peer.addr, 'mih_discovery.response', self._export_links(), parent=msg.id)
         

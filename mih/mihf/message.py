@@ -7,19 +7,25 @@ import util
 
 class Message(object):
 
-    def __init__(self, src, kind, payload=None, dst=None, parent=None):
+    def __init__(self, **kw):
         super(Message, self).__init__()
 
         self.id = util.gen_id('')
-        self.parent = parent
-        self.kind = kind
-        self.src = src
-        self.dst = dst
-        self.payload = payload
+        self.parent = kw.pop('parent', None)
+        self.kind = kw.pop('kind')
+        self.smihf = kw.pop('smihf')
+        self.dmihf = kw.pop('dmihf', None)
+        self.saddr = kw.pop('saddr', None)
+        self.daddr = kw.pop('daddr', None)
+        self.payload = kw.pop('payload', None)
 
     def __repr__(self):
-        return 'Message(id=%s, parent=%s, kind=%s, src=%s, dst=%s, payload=%s)'\
-                % (self.id, self.parent, self.kind, self.src, self.dst, self.payload)
+        s = ''
+        for k, v in self.__dict__.items():
+            if not k.startswith('_'):
+                s += '%s=%s, ' % (k, v)
+
+        return 'Message(%s)' % s.rstrip(', ')
 
     def __getstate__(self):
         dict = self.__dict__.copy()
