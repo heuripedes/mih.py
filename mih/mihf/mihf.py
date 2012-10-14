@@ -1,4 +1,4 @@
-# vim: ts=8 sts=4 sw=4 et ai nu
+# vim: ts=8 sts=4 sw=4 et nu
 
 import time
 import socket
@@ -67,6 +67,9 @@ class LocalMihf(BasicMihf):
         self._oqueue = collections.deque()
         self._iqueue = collections.deque()
 
+    @property
+    def current_link(self):
+        return self._curlink
 
     def discover(self, link):
 

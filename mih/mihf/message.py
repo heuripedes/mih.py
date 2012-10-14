@@ -1,4 +1,4 @@
-# vim: ts=8 sts=4 sw=4 et ai nu
+# vim: ts=8 sts=4 sw=4 et nu
 
 import util
 
