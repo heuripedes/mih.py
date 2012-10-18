@@ -342,3 +342,28 @@ class Link80211(Link):
                 util.average(self.samples) < WIFI_THRESHOLD)
 
 
+# TODO: look in https://github.com/openshine/ModemManager/blob/master/test/mm-test.py
+#       for inspiration
+class LinkMobile(Link):
+    def __init__(self, **kwargs):
+        self.wired  = False
+        self.wifi   = False
+        self.mobile = True
+
+        super(LinkMobile, self).__init__(**kwargs)
+
+    def update(self, *args, **kwargs):
+        super(LinkMobile, self).update(*args, **kwargs)
+
+    def poll(self):
+        super(LinkMobile, self).poll()
+
+    def poll_and_notify(self):
+        super(LinkMobile, self).poll_and_notify()
+
+    def up(self):
+        return super(LinkMobile, self).up():
+
+    def is_going_down(self):
+        return super(LinkMobile, self).is_going_down():
+
