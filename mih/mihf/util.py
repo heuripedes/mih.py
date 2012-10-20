@@ -120,6 +120,7 @@ def dhcp_renew(ifname):
 
 def bind_sock_to_device(sock, dev = ''):
     # TODO: use IP_PKTINFO
+    # TODO: move to sockios
     sock.setsockopt(socket.SOL_SOCKET, SO_BINDTODEVICE, dev)
 
 def match_output(pattern, cmd):

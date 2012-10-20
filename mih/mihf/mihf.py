@@ -76,11 +76,14 @@ class LocalMihf(BasicMihf):
         if not isinstance(link, str):
             link = link.ifname
 
-        util.bind_sock_to_device(self._sock, link)
-    
-        self._send(None, 'mih_discovery.request', daddr=('<broadcast>', self._port))
+        try:
+            util.bind_sock_to_device(self._sock, link)
+        
+            self._send(None, 'mih_discovery.request', daddr=('<broadcast>', self._port))
 
-        util.bind_sock_to_device(self._sock, '')
+            util.bind_sock_to_device(self._sock, '')
+        except socket.error as e:
+            logging.warning("Discovery failed: "+str(e))
 
 
     def switch(self, link):
