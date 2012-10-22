@@ -27,7 +27,7 @@ sysbus = dbus.SystemBus()
 mm_proxy = None
 try:
     mm_proxy = sysbus.get_object(MM_DBUS_SERVICE, MM_DBUS_PATH)
-except dbus.DBusExcept as e:
+except dbus.DBusException, e:
     print str(e)
 
 mm_iface = None
@@ -48,9 +48,9 @@ WIFI_SAMPLES   = 10
 
 # Mobile
 MOBILE_GSM_NUMBER = '*99#'
-MOBILE_GSM_APN  = "gprs.oi.com.br"
-MOBILE_GSM_USER = "oi"
-MOBILE_GSM_PASS = "oi"
+MOBILE_GSM_APN  = 'gprs.oi.com.br'
+MOBILE_GSM_USER = 'oi'
+MOBILE_GSM_PASS = 'oi'
 
 def get_local_ifnames():
     """
@@ -384,7 +384,6 @@ class Link80211(Link):
         
         return success
 
-
     def is_going_down(self):
         return (self.wifi and len(self.samples) == WIFI_SAMPLES and
                 util.average(self.samples) < WIFI_THRESHOLD)
@@ -460,10 +459,10 @@ class LinkMobile(Link):
 
     def _layer2_connect(self): # osi data link layer (ppp)
         args = [
-                'ppp',  # command
+                '/usr/sbin/pppd',  # command
                 'nodetach', 'lock', 'nodefaultroute', 'noipdefault',
-                'noauth', 'crtscts', 'modem', 'usepeerdns'
-                'debug'
+                'noauth', 'crtscts', 'modem', 'usepeerdns', 
+                'debug',
                 '115200' # baud
                 ]
 
@@ -483,12 +482,11 @@ class LinkMobile(Link):
             #if password: 
             #    args += ['password', password]
         
-        args += self.m_device
+        args += [self.m_device]
 
-        #proc = subproc.Popen(args, cwd='/', env={})
-        #i = 0
-        #while proc.poll() == None and i < 30
-        #    time.sleep(1)
+        print args
+
+        self._pppd = subproc.Popen(args, cwd='/', env={})
 
         # TODO: Finish this.
         # TODO: Class should keep a handler to the subproc.
@@ -497,7 +495,7 @@ class LinkMobile(Link):
     def _connect(self):
         try:
             self._modem.Enable(True)
-        except dbus.DBusException as e:
+        except dbus.DBusException, e:
             print 'Failed to enable the modem: %s' % e
             return False
 
@@ -539,7 +537,9 @@ class LinkMobile(Link):
         success = False
         
         return success
-
+    
+    # TODO: implement down()
+    
     def is_going_down(self):
         return super(LinkMobile, self).is_going_down()
 
