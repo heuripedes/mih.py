@@ -145,6 +145,7 @@ class Link(object):
         else:
             self._poll_mac()
 
+
     def _poll_mac(self):
         #with open('/sys/class/net/'+self.ifname+'/address') as f:
         #    self.macaddr = f.readline().strip()
@@ -190,7 +191,8 @@ class Link(object):
 
             if not is_ready and self.on_link_event:
                 self.on_link_event(self, 'down')
-    
+   
+
     def up(self):
         assert not self.remote
 
@@ -423,8 +425,8 @@ class LinkMobile(Link):
         if self.remote:
             return
         
-        simplenet = dbus.Interface(self._proxy, dbus_interface=MM_DBUS_INTERFACE_MODEM_SIMPLE)
-        status    = simplenet.GetStatus() 
+        net    = dbus.Interface(self._proxy, dbus_interface=MM_DBUS_INTERFACE_MODEM_SIMPLE)
+        status = net.GetStatus() 
 
         self.state = status['state'] == 11 # MM_MODEM_STATE_CONNECTED
         if not state:
@@ -454,8 +456,8 @@ class LinkMobile(Link):
                     }
         # TODO: add cdma
         
-        proxy = dbus.Interface(self._proxy, dbus_interface=MM_DBUS_INTERFACE_MODEM_SIMPLE)
-        proxy.Connect(opts, timeout=120)
+        net = dbus.Interface(self._proxy, dbus_interface=MM_DBUS_INTERFACE_MODEM_SIMPLE)
+        net.Connect(opts, timeout=120)
 
     def _layer2_connect(self): # osi data link layer (ppp)
         args = [
@@ -486,7 +488,12 @@ class LinkMobile(Link):
 
         print args
 
-        self._pppd = subproc.Popen(args, cwd='/', env={})
+        # XXX: pppd output must be unbufered or read()/write() will block.
+        #      in case pppd stdout is buffered, use UNIX sockets using socket.socketpair()
+        self._pppd = subproc.Popen(args, cwd='/', env={}, stdout=PIPE, stderr=PIPE)
+        
+        #util.set_blocking(self._pppd.stdout.fileno(), False)
+        #util.set_blocking(self._pppd.stderr.fileno(), False)
 
         # TODO: Finish this.
         # TODO: Class should keep a handler to the subproc.
@@ -521,6 +528,7 @@ class LinkMobile(Link):
 
         return True
 
+
     def up(self):
         assert not self.remote
 
@@ -537,9 +545,27 @@ class LinkMobile(Link):
         success = False
         
         return success
-    
-    # TODO: implement down()
-    
+
+   
+    def down(self):
+        assert not self.remote
+        
+        if not self.state or not self._pppd:
+            return True
+
+        success = super(LinkMobile, self).down()
+
+        util.set_blocking(self._pppd.stdout.fileno(), True)
+        util.set_blocking(self._pppd.stderr.fileno(), True)
+        self._pppd.terminate()
+        self._pppd = None
+        
+        self._modem.Disconnect()
+        self._modem.Enable(False)
+
+        return success
+
+
     def is_going_down(self):
         return super(LinkMobile, self).is_going_down()
 

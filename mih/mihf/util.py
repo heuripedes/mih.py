@@ -129,3 +129,10 @@ def match_output(pattern, cmd):
 
     return re.findall(pattern, subprocess.check_output(cmd))
 
+def set_blocking(fd, blocking):
+    import fcntl
+
+    flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+    flags = os.O_NONBLOCK * (blocking == False)
+    fcntl.fcntl(fd, fcntl.F_SETFL, flags)
+
