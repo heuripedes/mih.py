@@ -48,9 +48,9 @@ WIFI_SAMPLES   = 10
 
 # Mobile
 MOBILE_GSM_NUMBER = '*99#'
-MOBILE_GSM_APN  = "gprs.oi.com.br"
-MOBILE_GSM_USER = "oi"
-MOBILE_GSM_PASS = "oi"
+MOBILE_GSM_APN  = 'gprs.oi.com.br'
+MOBILE_GSM_USER = 'oi'
+MOBILE_GSM_PASS = 'oi'
 
 def get_local_ifnames():
     """
@@ -146,6 +146,7 @@ class Link(object):
         else:
             self._poll_mac()
 
+
     def _poll_mac(self):
         #with open('/sys/class/net/'+self.ifname+'/address') as f:
         #    self.macaddr = f.readline().strip()
@@ -191,7 +192,8 @@ class Link(object):
 
             if not is_ready and self.on_link_event:
                 self.on_link_event(self, 'down')
-    
+   
+
     def up(self):
         assert not self.remote
 
@@ -385,7 +387,6 @@ class Link80211(Link):
         
         return success
 
-
     def is_going_down(self):
         return (self.wifi and len(self.samples) == WIFI_SAMPLES and
                 util.average(self.samples) < WIFI_THRESHOLD)
@@ -431,8 +432,8 @@ class LinkMobile(Link):
         if self.remote:
             return
         
-        simplenet = dbus.Interface(self._proxy, dbus_interface=MM_DBUS_INTERFACE_MODEM_SIMPLE)
-        status    = simplenet.GetStatus() 
+        net    = dbus.Interface(self._proxy, dbus_interface=MM_DBUS_INTERFACE_MODEM_SIMPLE)
+        status = net.GetStatus() 
 
         self.state = status['state'] == 11 # MM_MODEM_STATE_CONNECTED
         if not state:
@@ -462,15 +463,15 @@ class LinkMobile(Link):
                     }
         # TODO: add cdma
         
-        proxy = dbus.Interface(self._proxy, dbus_interface=MM_DBUS_INTERFACE_MODEM_SIMPLE)
-        proxy.Connect(opts, timeout=120)
+        net = dbus.Interface(self._proxy, dbus_interface=MM_DBUS_INTERFACE_MODEM_SIMPLE)
+        net.Connect(opts, timeout=120)
 
     def _layer2_connect(self): # osi data link layer (ppp)
         args = [
-                'ppp',  # command
+                '/usr/sbin/pppd',  # command
                 'nodetach', 'lock', 'nodefaultroute', 'noipdefault',
-                'noauth', 'crtscts', 'modem', 'usepeerdns'
-                'debug'
+                'noauth', 'crtscts', 'modem', 'usepeerdns', 
+                'debug',
                 '115200' # baud
                 ]
 
@@ -552,7 +553,7 @@ class LinkMobile(Link):
         
         return success
 
-
+    
     def down(self):
         assert not self.remote
         
