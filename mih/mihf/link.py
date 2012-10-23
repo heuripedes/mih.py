@@ -27,7 +27,7 @@ sysbus = dbus.SystemBus()
 mm_proxy = None
 try:
     mm_proxy = sysbus.get_object(MM_DBUS_SERVICE, MM_DBUS_PATH)
-except dbus.DBusExcept as e:
+except dbus.DBusException, e:
     print str(e)
 
 mm_iface = None
@@ -61,14 +61,15 @@ def get_local_ifnames():
     prefixes = ('lo', 'virbr', 'vboxnet')
     ifnames  = filter(lambda name: not name.startswith(prefixes), sockios.get_iflist())
 
+    # ModemManager not available
+    if not mm_iface:
+        return ifnames
+
     # Cell technologies
     #mm_iface.ScanDevices()
     modems = mm_iface.EnumerateDevices()
     for m in modems:
         print m + ":"
-
-        #proxy = sysbus.get_object(MM_DBUS_INTERFACE, m)
-        #props = dbus.Interface(proxy, dbus_interface=DBUS_INTERFACE_PROPERTIES)
         
         import pprint
         link = make_link(ifname=m)
@@ -419,6 +420,12 @@ class LinkMobile(Link):
 
     def update(self, *args, **kwargs):
         super(LinkMobile, self).update(*args, **kwargs)
+        
+        self.strenght = 0
+        self.samples  = collections.deque(maxlen=WIFI_SAMPLES)
+
+        if self.remote:
+            self.strenght =  kwargs.pop('strenght', -1)
 
     def poll(self):
         if self.remote:
@@ -483,12 +490,16 @@ class LinkMobile(Link):
             #if password: 
             #    args += ['password', password]
         
-        args += self.m_device
+        args += [self.m_device]
 
-        #proc = subproc.Popen(args, cwd='/', env={})
-        #i = 0
-        #while proc.poll() == None and i < 30
-        #    time.sleep(1)
+        print args
+
+        # XXX: pppd output must be unbufered or read()/write() will block.
+        # in case pppd stdout is buffered, use UNIX sockets using socket.socketpair()
+        self._pppd = subproc.Popen(args, cwd='/', env={}, stdout=PIPE, stderr=PIPE)
+        
+        #util.set_blocking(self._pppd.stdout.fileno(), False)
+        #util.set_blocking(self._pppd.stderr.fileno(), False)
 
         # TODO: Finish this.
         # TODO: Class should keep a handler to the subproc.
@@ -497,13 +508,13 @@ class LinkMobile(Link):
     def _connect(self):
         try:
             self._modem.Enable(True)
-        except dbus.DBusException as e:
+        except dbus.DBusException, e:
             print 'Failed to enable the modem: %s' % e
             return False
 
         try:
             self._layer1_connect()
-        except Exception, e:
+        except dbus.DBusException, e:
             print 'Failed to connect: %s' % e
             
             try:
@@ -523,6 +534,7 @@ class LinkMobile(Link):
 
         return True
 
+
     def up(self):
         assert not self.remote
 
@@ -539,6 +551,26 @@ class LinkMobile(Link):
         success = False
         
         return success
+
+
+    def down(self):
+        assert not self.remote
+        
+        if not self.state or not self._pppd:
+            return True
+
+        success = super(LinkMobile, self).down()
+
+        util.set_blocking(self._pppd.stdout.fileno(), True)
+        util.set_blocking(self._pppd.stderr.fileno(), True)
+        self._pppd.terminate()
+        self._pppd = None
+        
+        self._modem.Disconnect()
+        self._modem.Enable(False)
+
+        return success
+
 
     def is_going_down(self):
         return super(LinkMobile, self).is_going_down()
