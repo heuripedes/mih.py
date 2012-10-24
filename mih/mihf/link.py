@@ -11,29 +11,8 @@ import time
 import sockios
 sockios.init()
 
-# DBus and ModemManager
-import dbus
-DBUS_INTERFACE_PROPERTIES='org.freedesktop.DBus.Properties'
-MM_DBUS_SERVICE='org.freedesktop.ModemManager'
-MM_DBUS_PATH='/org/freedesktop/ModemManager'
-MM_DBUS_INTERFACE='org.freedesktop.ModemManager'
-MM_DBUS_INTERFACE_MODEM='org.freedesktop.ModemManager.Modem'
-MM_DBUS_INTERFACE_MODEM_CDMA='org.freedesktop.ModemManager.Modem.Cdma'
-MM_DBUS_INTERFACE_MODEM_GSM_CARD='org.freedesktop.ModemManager.Modem.Gsm.Card'
-MM_DBUS_INTERFACE_MODEM_GSM_NETWORK='org.freedesktop.ModemManager.Modem.Gsm.Network'
-MM_DBUS_INTERFACE_MODEM_SIMPLE='org.freedesktop.ModemManager.Modem.Simple'
-
-sysbus = dbus.SystemBus()
-
-mm_proxy = None
-try:
-    mm_proxy = sysbus.get_object(MM_DBUS_SERVICE, MM_DBUS_PATH)
-except dbus.DBusException, e:
-    print str(e)
-
-mm_iface = None
-if mm_proxy:
-    mm_iface = dbus.Interface(mm_proxy, dbus_interface=MM_DBUS_INTERFACE)
+# ModemManager
+import mm
 
 # Interface properties
 
@@ -59,16 +38,14 @@ def get_local_ifnames():
     """
 
     # Local common interfaces pci/amr/virtual/etc
-    prefixes = ('lo', 'virbr', 'vboxnet')
+    prefixes = ('lo', 'virbr', 'vboxnet', 'ppp0')
     ifnames  = filter(lambda name: not name.startswith(prefixes), sockios.get_iflist())
 
-    # ModemManager not available
-    if not mm_iface:
-        return ifnames
+    return ifnames
 
-    # Cell technologies
-    #mm_iface.ScanDevices()
-    modems = mm_iface.EnumerateDevices()
+
+def get_modems():
+    modems = mm.ModemManager.EnumerateDevices()
     for m in modems:
         print m + ":"
         
@@ -78,15 +55,9 @@ def get_local_ifnames():
         pprint.pprint(link.as_dict())
         link.down()
         os.abort()
-    # with open('/proc/net/dev') as f:
-    #     for line in f:
-    #         if line.count('|') < 1:
-    #             ifname = line.strip().split(':')[0]
 
-    #             if not ifname.startswith(prefixes):
-    #                 ifnames.append(ifname)
+    return modems
 
-    return ifnames
 
 def make_link(**kwargs):
     if kwargs.get('remote', False):
@@ -150,8 +121,8 @@ class Link(object):
 
 
     def _poll_mac(self):
-        #with open('/sys/class/net/'+self.ifname+'/address') as f:
-        #    self.macaddr = f.readline().strip()
+        with open('/sys/class/net/'+self.ifname+'/address') as f:
+            self.macaddr = f.readline().strip()
         pass
 
 
@@ -405,19 +376,15 @@ class LinkMobile(Link):
 
         if not kwargs.get('remote'):
 
-            self._proxy = sysbus.get_object(MM_DBUS_INTERFACE, kwargs.get('ifname'))
-            self._props = dbus.Interface(self._proxy, dbus_interface=DBUS_INTERFACE_PROPERTIES)
-            self._modem = dbus.Interface(self._proxy, dbus_interface=MM_DBUS_INTERFACE_MODEM)
-            self._getp = lambda p: self._props.Get(MM_DBUS_INTERFACE_MODEM, p)
-            
-            types = [None, 'gsm','cdma']
-            if self._getp('Type') not in range(1, len(types)):
+            self._modem = mm.Modem(kwargs.get('ifname'))
+
+            if self._modem.Type != mm.MM_MODEM_TYPE_GSM:
                 raise 'Unsupported modem type.'
 
             self._dbus_name = kwargs.get('ifname')
-            self.m_type   = types[self._getp('Type')]
-            self.m_master = self._getp('MasterDevice')
-            self.m_device = self._getp('Device')
+
+            self.m_master = self._modem.MasterDevice
+            self.m_device = self._modem.Device
 
             kwargs['ifname'] = None
 
@@ -433,18 +400,22 @@ class LinkMobile(Link):
 
         if self.remote:
             self.strenght =  kwargs.pop('strenght', -1)
+   
+
+    def _poll_mac(self):
+        if self.ifname:
+            super(LinkMobile, self)._poll_mac()
 
 
     def poll(self):
         if self.remote:
             return
         
-        self.state = self._getp('State') == 90 # MM_MODEM_STATE_CONNECTED
+        self.state = (self._modem.State == mm.MM_MODEM_STATE_CONNECTED)
         if not state:
             return
         
-        net    = dbus.Interface(self._proxy, dbus_interface=MM_DBUS_INTERFACE_MODEM_SIMPLE)
-        status = net.GetStatus() 
+        status = self._modem.GetStatus()
 
         if not self.is_ready():
             self.strenght = 0
@@ -488,21 +459,8 @@ class LinkMobile(Link):
                 '115200' # baud
                 ]
 
-        username = None
-        password = None
-
-        if self.m_type == 'gsm':
-            username = MOBILE_GSM_USER
-            password = MOBILE_GSM_PASS
-        
-        # TODO: add cdma
-        
-        if username:
-            args += ['user', username]
-
-            # XXX: Setting password this way may be dangerous, check pppd(8).
-            #if password: 
-            #    args += ['password', password]
+        if MOBILE_GSM_USER:
+            args += ['user', MOBILE_GSM_USER]
         
         args += [self.m_device]
 
@@ -516,11 +474,11 @@ class LinkMobile(Link):
         except IOError, e:
             print 'Failed to run pppd: %s' % e
             return False
-      
+     
+        # non-blockign stdout
         util.set_blocking(self._pppd.stdout.fileno(), False)
-        #util.set_blocking(self._pppd.stderr.fileno(), False)
         
-        attempts = 200 # 20 segundos
+        attempts = 200 # 20 secs
         while (self._pppd.poll() is None and 
                 (not self.ifname or not self.ipaddr) and
                 attempts):
@@ -547,7 +505,6 @@ class LinkMobile(Link):
                     self.ipaddr = matches[0]
             #print 'attempt:', 200 - attempts,'line:',line
       
-        #print self.ifname, self.ipaddr, 200-attempts
         if not self.ifname or not self.ipaddr:
             return False
 
@@ -557,23 +514,19 @@ class LinkMobile(Link):
         """Register the device with a network provider."""
 
         print 'Connecting modem...'
-        opts = None
 
-        if self.m_type == 'gsm':
-            opts = {
-                    'number':   MOBILE_GSM_NUMBER,
-                    'apn':      MOBILE_GSM_APN,
-                    'username': MOBILE_GSM_USER,
-                    'password': MOBILE_GSM_PASS
-                    }
-        # TODO: add cdma
-        
-        net = dbus.Interface(self._proxy, dbus_interface=MM_DBUS_INTERFACE_MODEM_SIMPLE)
-        net.Connect(opts, timeout=120)
+        opts = {
+                'number':   MOBILE_GSM_NUMBER,
+                'apn':      MOBILE_GSM_APN,
+                'username': MOBILE_GSM_USER,
+                'password': MOBILE_GSM_PASS
+                }
+
+        self._modem.Connecting(opts, timeout=120)
 
         # Wait up to 3 secs until connected.
         for attempt in range(0, 30):
-            if self._getp('State') == 90:
+            if self._modem.State == mm.MM_MODEM_STATE_CONNECTED:
                 return True
 
             time.sleep(0.1)
@@ -583,8 +536,8 @@ class LinkMobile(Link):
         """Disconnect packet data connections."""
         
         print 'Disconnecting modem...'
-
-        if self._getp('State') > 9: # searching, registered or fully connected
+        
+        if self._modem.State > mm.MM_MODEM_STATE_REGISTERED: # registered/connected
             try:
                 self._modem.Disconnect()
             except dbus.DBusException, e:
@@ -593,7 +546,7 @@ class LinkMobile(Link):
             
             # Wait up to 3 secs until disconnected.
             for attempt in range(0, 30):
-                if self._getp('State') < 70:
+                if self._modem.State < mm.MM_MODEM_STATE_DISCONNECTING:
                     return True
 
                 time.sleep(0.1)
@@ -602,8 +555,6 @@ class LinkMobile(Link):
     
     def up(self):
         assert not self.remote
-
-        print 'state:', self._getp('State')
 
         if self.is_ready():
             return True
@@ -627,8 +578,6 @@ class LinkMobile(Link):
     
     def down(self):
         assert not self.remote
-        
-        print 'state:', self._getp('State')
         
         if not self.state or not self._pppd:
             return True

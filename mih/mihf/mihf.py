@@ -218,26 +218,37 @@ class LocalMihf(BasicMihf):
 
         return exported
 
-    def _refresh_links(self):
-        """Refreshes the MIHF link list."""
-       
-        if self._next_refresh < time.time():
-            self._next_refresh = time.time() + 0.5 # 500 ms
-        else:
-            return self._ready_cache
-
+    def _scan_links(self):
+        """Checks for newly added interfaces and removes unexistent ones."""
+        
         llnames = get_local_ifnames()
         new  = list(set(llnames) - set(self._links.keys()))
         dead = list(set(self._links.keys()) - set(llnames))
 
         for name in dead:
-            # NOTE: send link down?
+            # XXX: send link down?
             del self._links[name]
 
         for name in new:
             link = make_link(ifname=name)
             link.on_link_event = self._handle_link_event
             self._links[name] = link
+
+
+    def _refresh_links(self):
+        """Refreshes the MIHF link list."""
+
+        if self._next_refresh < time.time():
+            self._next_refresh = time.time() + 0.5 # 500 ms
+        else:
+            return self._ready_cache
+            
+        # XXX: Server hardware doesn't change as much as client's.
+        # TODO: Reduce the amount of checks for new/missing interfaces.
+        self._scan_links()
+
+        # TODO: add modem checks
+
 
         ready = []
 
