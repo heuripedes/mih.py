@@ -85,7 +85,6 @@ class LocalMihf(BasicMihf):
         except socket.error as e:
             logging.warning("Discovery failed: "+str(e))
 
-
     def switch(self, link):
 
         if not link.up():
@@ -102,8 +101,6 @@ class LocalMihf(BasicMihf):
 
         return True
     
-    
-
     def _make_socket(self, bind=False, blocking=False, timeout=0.3):
 
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -167,7 +164,6 @@ class LocalMihf(BasicMihf):
             if link:
                 util.bind_sock_to_device(self._sock, '')
 
-
     def _fill_buffer(self):
         """Fills the input queue."""
 
@@ -190,20 +186,16 @@ class LocalMihf(BasicMihf):
 
             self._iqueue.append((addr, msg))
 
-
     def _handle_message(self, srcaddr, msg):
         pass
-
 
     def _handle_link_event(self, link, state):
         logging.info('Link %s is %s', link, state)
 
         self._notify_user(link, state)
 
-
     def _notify_user(self, link, state):
         self._handler(self, link, state)
-
 
     def _export_links(self):
         """Returns a list of link data suitable for remote use."""
@@ -234,7 +226,6 @@ class LocalMihf(BasicMihf):
             link.on_link_event = self._handle_link_event
             self._links[name] = link
 
-
     def _refresh_links(self):
         """Refreshes the MIHF link list."""
 
@@ -248,7 +239,6 @@ class LocalMihf(BasicMihf):
         self._scan_links()
 
         # TODO: add modem checks
-
 
         ready = []
 
@@ -284,8 +274,8 @@ class LocalMihf(BasicMihf):
             self._handle_message(addr, msg)
 
 
-
 class RemoteMihf(BasicMihf):
+   
     def __init__(self, name, addr, links=dict()):
         super(RemoteMihf, self).__init__()
         
@@ -311,9 +301,10 @@ class RemoteMihf(BasicMihf):
 
 
 class ClientMihf(LocalMihf):
+
     def __init__(self, handler, port=12345):
         super(ClientMihf, self).__init__(handler, port)
-    
+
     def run(self):
         logging.info('Starting client MIHF %s', self._name)
 
@@ -331,7 +322,6 @@ class ClientMihf(LocalMihf):
                         break
 
             self._flush_buffer()
-
 
     def _handle_message(self, srcaddr, msg):
         
@@ -351,6 +341,7 @@ class ClientMihf(LocalMihf):
 
 
 class ServerMihf(LocalMihf):
+   
     def __init__(self, handler, port=12345):
         super(ServerMihf, self).__init__(handler, port)
 
@@ -376,7 +367,6 @@ class ServerMihf(LocalMihf):
                     link.up()
 
             self._flush_buffer()
-
 
     def _handle_message(self, srcaddr, msg):
         
