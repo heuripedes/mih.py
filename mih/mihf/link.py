@@ -1,11 +1,12 @@
 
 import os
 import collections
-#import errno
+import errno
 import shlex
 import subprocess as subproc
 import re
 import util
+import time
 
 import sockios
 sockios.init()
@@ -75,6 +76,7 @@ def get_local_ifnames():
         link = make_link(ifname=m)
         link.up()
         pprint.pprint(link.as_dict())
+        link.down()
         os.abort()
     # with open('/proc/net/dev') as f:
     #     for line in f:
@@ -401,43 +403,48 @@ class LinkMobile(Link):
         self.wifi   = False
         self.mobile = True
 
-        self._proxy = sysbus.get_object(MM_DBUS_INTERFACE, kwargs.get('ifname'))
-        self._props = dbus.Interface(self._proxy, dbus_interface=DBUS_INTERFACE_PROPERTIES)
-        self._modem = dbus.Interface(self._proxy, dbus_interface=MM_DBUS_INTERFACE_MODEM)
-        self._getp = lambda p: self._props.Get(MM_DBUS_INTERFACE_MODEM, p)
-        
-        types = [None, 'gsm','cdma']
-        if self._getp('Type') not in range(1, len(types)):
-            raise 'Unsupported modem type.'
+        if not kwargs.get('remote'):
 
-        self._dbus_name = kwargs.get('ifname')
-        self.m_type   = types[self._getp('Type')]
-        self.m_master = self._getp('MasterDevice')
-        self.m_device = self._getp('Device')
+            self._proxy = sysbus.get_object(MM_DBUS_INTERFACE, kwargs.get('ifname'))
+            self._props = dbus.Interface(self._proxy, dbus_interface=DBUS_INTERFACE_PROPERTIES)
+            self._modem = dbus.Interface(self._proxy, dbus_interface=MM_DBUS_INTERFACE_MODEM)
+            self._getp = lambda p: self._props.Get(MM_DBUS_INTERFACE_MODEM, p)
+            
+            types = [None, 'gsm','cdma']
+            if self._getp('Type') not in range(1, len(types)):
+                raise 'Unsupported modem type.'
 
-        kwargs['ifname'] = None
+            self._dbus_name = kwargs.get('ifname')
+            self.m_type   = types[self._getp('Type')]
+            self.m_master = self._getp('MasterDevice')
+            self.m_device = self._getp('Device')
+
+            kwargs['ifname'] = None
 
         super(LinkMobile, self).__init__(**kwargs)
+
 
     def update(self, *args, **kwargs):
         super(LinkMobile, self).update(*args, **kwargs)
         
+        self.ipaddr = None
         self.strenght = 0
         self.samples  = collections.deque(maxlen=WIFI_SAMPLES)
 
         if self.remote:
             self.strenght =  kwargs.pop('strenght', -1)
 
+
     def poll(self):
         if self.remote:
             return
         
-        net    = dbus.Interface(self._proxy, dbus_interface=MM_DBUS_INTERFACE_MODEM_SIMPLE)
-        status = net.GetStatus() 
-
-        self.state = status['state'] == 11 # MM_MODEM_STATE_CONNECTED
+        self.state = self._getp('State') == 90 # MM_MODEM_STATE_CONNECTED
         if not state:
             return
+        
+        net    = dbus.Interface(self._proxy, dbus_interface=MM_DBUS_INTERFACE_MODEM_SIMPLE)
+        status = net.GetStatus() 
 
         if not self.is_ready():
             self.strenght = 0
@@ -448,30 +455,36 @@ class LinkMobile(Link):
 
         super(LinkMobile, self).poll()
 
+
     def poll_and_notify(self):
         super(LinkMobile, self).poll_and_notify()
 
-    def _layer1_connect(self): # osi physical layer (2g,3g,4g...)
-        opts = None
 
-        if self.m_type == 'gsm':
-            opts = {
-                    'number':   MOBILE_GSM_NUMBER,
-                    'apn':      MOBILE_GSM_APN,
-                    'username': MOBILE_GSM_USER,
-                    'password': MOBILE_GSM_PASS
-                    }
-        # TODO: add cdma
-        
-        net = dbus.Interface(self._proxy, dbus_interface=MM_DBUS_INTERFACE_MODEM_SIMPLE)
-        net.Connect(opts, timeout=120)
+  
+    def _enable(self, enable):
+        if enable:
+            print 'Enabling modem...'
+        else:
+            print 'Disabling modem...'
 
-    def _layer2_connect(self): # osi data link layer (ppp)
+        try:
+            self._modem.Enable(enable)
+            return True
+        except dbus.DBusException, e:
+            if enable:
+                print 'Failed to enable the modem: %s' % e
+            else:
+                print 'Failed to disable the modem: %s' % e
+
+            return False
+    
+    
+    def _pppd_connect(self): # osi data link layer (ppp)
         args = [
                 '/usr/sbin/pppd',  # command
                 'nodetach', 'lock', 'nodefaultroute', 'noipdefault',
                 'noauth', 'crtscts', 'modem', 'usepeerdns', 
-                'debug',
+                #'debug',
                 '115200' # baud
                 ]
 
@@ -493,69 +506,129 @@ class LinkMobile(Link):
         
         args += [self.m_device]
 
-        print args
+        #print 'Running pppd...'
 
-        # XXX: pppd output must be unbufered or read()/write() will block.
-        # in case pppd stdout is buffered, use UNIX sockets using socket.socketpair()
-        self._pppd = subproc.Popen(args, cwd='/', env={}, stdout=PIPE, stderr=PIPE)
-        
-        #util.set_blocking(self._pppd.stdout.fileno(), False)
+        try:
+            # XXX: pppd output must be unbufered or read()/write() will block.
+            # in case pppd stdout is buffered, use UNIX sockets using socket.socketpair()
+            self._pppd = subproc.Popen(args, cwd='/', env={},
+                    stdout=subproc.PIPE, stderr=subproc.PIPE)
+        except IOError, e:
+            print 'Failed to run pppd: %s' % e
+            return False
+      
+        util.set_blocking(self._pppd.stdout.fileno(), False)
         #util.set_blocking(self._pppd.stderr.fileno(), False)
-
-        # TODO: Finish this.
-        # TODO: Class should keep a handler to the subproc.
-        # TODO: Catch wich interface ppp will use from the log.
         
-    def _connect(self):
-        try:
-            self._modem.Enable(True)
-        except dbus.DBusException, e:
-            print 'Failed to enable the modem: %s' % e
-            return False
-
-        try:
-            self._layer1_connect()
-        except dbus.DBusException, e:
-            print 'Failed to connect: %s' % e
-            
+        attempts = 200 # 20 segundos
+        while (self._pppd.poll() is None and 
+                (not self.ifname or not self.ipaddr) and
+                attempts):
+            line = None
             try:
-                self._modem.Enable(False)
-            except:
-                pass
+                line = self._pppd.stdout.readline().strip()
+            except IOError, e:
+                if e.errno == errno.EAGAIN:
+                    time.sleep(0.1)
+                    attempts -= 1
+                    continue
+                raise e
 
+            if not line:
+                continue
+
+            if not self.ifname:
+                matches = re.findall('Using\s+interface\s+([a-z0-9]+)', line)
+                if matches:
+                    self.ifname = matches[0]
+            elif not self.ipaddr:
+                matches = re.findall('local\s+IP\s+address\s+([0-9.]+)', line)
+                if matches:
+                    self.ipaddr = matches[0]
+            #print 'attempt:', 200 - attempts,'line:',line
+      
+        #print self.ifname, self.ipaddr, 200-attempts
+        if not self.ifname or not self.ipaddr:
             return False
-
-        try:
-            self._layer2_connect()
-        except Exception, e:
-            print 'Failed to connect: %s' % e
-            return False
-
-        # TODO: set self.ifname
 
         return True
 
+    def _connect(self):
+        """Register the device with a network provider."""
 
+        print 'Connecting modem...'
+        opts = None
+
+        if self.m_type == 'gsm':
+            opts = {
+                    'number':   MOBILE_GSM_NUMBER,
+                    'apn':      MOBILE_GSM_APN,
+                    'username': MOBILE_GSM_USER,
+                    'password': MOBILE_GSM_PASS
+                    }
+        # TODO: add cdma
+        
+        net = dbus.Interface(self._proxy, dbus_interface=MM_DBUS_INTERFACE_MODEM_SIMPLE)
+        net.Connect(opts, timeout=120)
+
+        # Wait up to 3 secs until connected.
+        for attempt in range(0, 30):
+            if self._getp('State') == 90:
+                return True
+
+            time.sleep(0.1)
+        return False
+
+    def _disconnect(self):
+        """Disconnect packet data connections."""
+        
+        print 'Disconnecting modem...'
+
+        if self._getp('State') > 9: # searching, registered or fully connected
+            try:
+                self._modem.Disconnect()
+            except dbus.DBusException, e:
+                print 'Failed to disconnect the modem: %s' % e
+                return False
+            
+            # Wait up to 3 secs until disconnected.
+            for attempt in range(0, 30):
+                if self._getp('State') < 70:
+                    return True
+
+                time.sleep(0.1)
+        return True
+
+    
     def up(self):
         assert not self.remote
 
+        print 'state:', self._getp('State')
+
         if self.is_ready():
             return True
+        
+        self._enable(False)
+        if not self._enable(True):
+            return False
 
         if not self._connect():
+            self._enable(False)
+            return False
+
+        if not self._pppd_connect():
             return False
 
         if not super(LinkMobile, self).up():
             return False
 
-        # TODO: Configure interface
-        success = False
-        
-        return success
+        return True
 
     
     def down(self):
         assert not self.remote
+        
+        print 'state:', self._getp('State')
         
         if not self.state or not self._pppd:
             return True
@@ -569,6 +642,9 @@ class LinkMobile(Link):
         
         self._modem.Disconnect()
         self._modem.Enable(False)
+
+        self.ifname = None
+        self.ipaddr = None
 
         return success
 
