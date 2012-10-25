@@ -14,20 +14,20 @@ situation on the college I attend.
 
 Assumptions
 ===
-	# Hardware doesn't change. In case of hardware change (e.g. an NIC 
-	  disapears), the behavior is undefined.
-	
-	# The best link is always the one of the most reliable technology 
-	  (e.g. wifi > 3g).  If technology is the same, the best link is 
-	  either the one with best signal strenght or the first.
+# Hardware doesn't change. In case of hardware change (e.g. an NIC 
+  disapears), the behavior is undefined.
 
-	# The 3g Base Station do not support MIH-like services, at least not 
-	  the one implemented by this application. That means that no peer 
-	  discovery is done when you connect to a 3g network.
+# The best link is always the one of the most reliable technology 
+  (e.g. wifi > 3g).  If technology is the same, the best link is 
+  either the one with best signal strenght or the first.
 
-	# There's no other application managing NICs. The program tries his 
-	  best to keep NIC information updated, but if an external program 
-	  changes anything the behavior is undefined.
+# The 3g Base Station do not support MIH-like services, at least not 
+  the one implemented by this application. That means that no peer 
+  discovery is done when you connect to a 3g network.
+
+# There's no other application managing NICs. The program tries his 
+  best to keep NIC information updated, but if an external program 
+  changes anything the behavior is undefined.
 
 Dependencies
 ===
@@ -38,6 +38,7 @@ dbus-glib
 ModemManager 0.6 (http://download.gnome.org/sources/ModemManager/0.6/ModemManager-0.6.0.0.tar.xz)
 
 *Arch Linux*
+
 `pacman -S python2-dbus dbus-glib modemmanager`
 
 
