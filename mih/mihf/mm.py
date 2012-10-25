@@ -46,6 +46,7 @@ try:
     ModemManager = ModemManagerWrapper()
 except dbus.DBusException, e:
     print 'Failed to access ModemManager DBus service: ', e
+    raise e
 
 
 class Modem(object):

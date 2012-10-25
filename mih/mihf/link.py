@@ -40,24 +40,23 @@ def get_local_ifnames():
     # Local common interfaces pci/amr/virtual/etc
     prefixes = ('lo', 'virbr', 'vboxnet', 'ppp0')
     ifnames  = filter(lambda name: not name.startswith(prefixes), sockios.get_iflist())
+    ifnames += mm.ModemManager.EnumerateDevices()
 
     return ifnames
 
-
-def get_modems():
-    modems = mm.ModemManager.EnumerateDevices()
-    for m in modems:
-        print m + ":"
-        
-        import pprint
-        link = make_link(ifname=m)
-        link.up()
-        pprint.pprint(link.as_dict())
-        link.down()
-        os.abort()
-
-    return modems
-
+#def get_modems():
+#    modems = mm.ModemManager.EnumerateDevices()
+#    for m in modems:
+#        print m + ":"
+#        
+#        import pprint
+#        link = make_link(ifname=m)
+#        link.up()
+#        pprint.pprint(link.as_dict())
+#        link.down()
+#        os.abort()
+#
+#    return modems
 
 def make_link(**kwargs):
     if kwargs.get('remote', False):
@@ -75,6 +74,7 @@ def make_link(**kwargs):
         return Link80211(**kwargs)
     else:
         return Link80203(**kwargs)
+
 
 class Link(object):
     def __init__(self, **kwargs):

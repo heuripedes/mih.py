@@ -219,7 +219,7 @@ class LocalMihf(BasicMihf):
 
         for name in dead:
             # XXX: send link down?
-            logging.warning('Local link disappeared %s', name)
+            logging.warning('Local link not found %s', name)
             del self._links[name]
 
         for name in new:
@@ -234,12 +234,6 @@ class LocalMihf(BasicMihf):
             self._next_refresh = time.time() + 0.5 # 500 ms
         else:
             return self._ready_cache
-            
-        # XXX: Server hardware doesn't change as much as client's.
-        # TODO: Reduce the amount of checks for new/missing interfaces.
-        self._scan_links()
-
-        # TODO: add modem checks
 
         ready = []
 
@@ -310,6 +304,7 @@ class ClientMihf(LocalMihf):
         logging.info('Starting client MIHF %s', self._name)
 
         self._make_socket()
+        self._scan_links()
 
         while True:
             self._fill_buffer()
@@ -356,6 +351,7 @@ class ServerMihf(LocalMihf):
         logging.info('Starting server MIHF %s', self._name)
 
         self._make_socket(bind=True)
+        self._scan_links()
 
         while True:
             self._fill_buffer()
