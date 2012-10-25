@@ -219,6 +219,7 @@ class LocalMihf(BasicMihf):
 
         for name in dead:
             # XXX: send link down?
+            logging.warning('Local link disappeared %s', name)
             del self._links[name]
 
         for name in new:
