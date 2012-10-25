@@ -31,13 +31,14 @@ Assumptions
 
 Dependencies
 ===
-Python 2.7
-dbus
-python-dbus
-dbus-glib
-ModemManager 0.6 (http://download.gnome.org/sources/ModemManager/0.6/ModemManager-0.6.0.0.tar.xz)
+- Python 2.7
+- dbus
+- python-dbus
+- dbus-glib
+- ModemManager 0.6 (http://download.gnome.org/sources/ModemManager/0.6/ModemManager-0.6.0.0.tar.xz)
 
-**Arch Linux:**
+on **Arch Linux**, run:
+
 	pacman -S python2-dbus dbus-glib modemmanager
 
 
