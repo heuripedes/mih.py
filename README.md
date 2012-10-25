@@ -15,11 +15,12 @@ situation on the college I attend.
 Assumptions
 ===
 - Hardware doesn't change. In case of hardware change (e.g. an NIC 
-  disapears), the behavior is undefined.
+  disapears), the behavior is undefined. NOTE: point-to-point 3g interfaces 
+  don't count, it's assumed they're not permanent.
 
 - The best link is always the one of the most reliable technology 
   (e.g. wifi > 3g).  If technology is the same, the best link is 
-  either the one with best signal strenght or the first.
+  either the one with best signal strength or the first.
 
 - The 3g Base Station do not support MIH-like services, at least not 
   the one implemented by this application. That means that no peer 
