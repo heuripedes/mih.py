@@ -12,7 +12,6 @@ import util
 from link import *
 from message import Message
 
-
 class BasicMihf(object):
     """This class describes the common operations that all MIHFs classes 
     should implement"""
@@ -76,16 +75,15 @@ class LocalMihf(BasicMihf):
         if not isinstance(link, str):
             link = link.ifname
 
-        try:
-            util.bind_sock_to_device(self._sock, link)
-        
-            self._send(None, 'mih_discovery.request', daddr=('<broadcast>', self._port))
+        util.bind_sock_to_device(self._sock, link)
+    
+        self._send(None, 'mih_discovery.request', daddr=('<broadcast>', self._port))
 
-            util.bind_sock_to_device(self._sock, '')
-        except socket.error as e:
-            logging.warning("Discovery failed: "+str(e))
+        util.bind_sock_to_device(self._sock, '')
 
     def switch(self, link):
+        
+        logging.debug('Switching from %s to %s', self._curlink, link);
 
         if not link.up():
             link.down()
@@ -142,7 +140,7 @@ class LocalMihf(BasicMihf):
 
         while self._oqueue:
             link, msg = self._oqueue.pop()
-
+            
             if link:
                 util.bind_sock_to_device(self._sock, link)
 
@@ -190,12 +188,10 @@ class LocalMihf(BasicMihf):
         pass
 
     def _handle_link_event(self, link, state):
-        logging.info('Link %s is %s', link, state)
-
         self._notify_user(link, state)
 
-    def _notify_user(self, link, state):
-        self._handler(self, link, state)
+    def _notify_user(self, link, state, scope='local'):
+        self._handler[scope](self, link, state, scope)
 
     def _export_links(self):
         """Returns a list of link data suitable for remote use."""
@@ -223,9 +219,11 @@ class LocalMihf(BasicMihf):
             del self._links[name]
 
         for name in new:
+            logging.debug('Found link %s.', name)
             link = make_link(ifname=name)
             link.on_link_event = self._handle_link_event
             self._links[name] = link
+
 
     def _refresh_links(self):
         """Refreshes the MIHF link list."""
@@ -261,10 +259,6 @@ class LocalMihf(BasicMihf):
                 link.down()
 
     def _proccess_messages(self):
-        #addr, msg = self._receive()
-        #if msg:
-        #    self._handle_message(addr, msg)
-            
         for addr, msg in self._receive():
             self._handle_message(addr, msg)
 

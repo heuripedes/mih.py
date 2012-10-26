@@ -2,58 +2,39 @@
 # vim: ts=8 sts=4 sw=4 et nu
 
 import mihf
+import mihf.util as util
 import logging
 
-def client_user(mihf, link, status):
+def client_remote_link_handler(mihf, link, status, scope):
+    pass
+
+def client_local_link_handler(mihf, link, state, scope):
     current = mihf.current_link
 
-    if status == 'down' or status == 'going down':
-        
-        if current and current.is_ready():
-            return
-
+    logging.info('Link %s is %s', link, state)
+    
+    # Try to switch if the current link is down or going down.
+    if current == link and (state == 'down' or state == 'going down'):
         up_links = [l for l in mihf.links if l.is_ready()]
 
-        if link.remote or not up_links:
+        if not up_links:
+            logging.warning('No suitable link to fallback.')
             return
-
-        better = up_links[0]
-
-        for l in uplinks:
-            # wired is better than everything because i said so.
-            if not l.wifi and not l.mobile:
-                better = l
-                break
-
-            # wifi is better than mobile 
-            if l.wifi and better.mobile:
-                better = l
-            
-            # if its the same tech, signal strenght decides who's better
-            if (((l.wifi and better.wifi) or (l.mobile and better.mobile)) and 
-                (l.strenght > better.strenght)):
-                    better = l
-
-        print '- Best link:', better.ifname
+        
+        better = sorted(up_links, util.link_compare)[0]
 
         if mihf.switch(better):
-            print '- Switched to', better.ifname
+            logging.info('Switched to %s.', better.ifname)
 
-
-    elif status == 'up':
-
-        if current == link:
-            return
-
-        if (not current or
-            (current.mobile and not link.mobile) or
-            (current.wifi and not link.wifi)):
-
-            if mihf.switch(link):
-                print '- Switched to', link.ifname
-
-        mihf.discover(link)
-
+    # Try to use the newly available link as main if we're not connected at 
+    # the moment. Send discovery message if the switching succeed.
+    if not current and state == 'up':
+        if mihf.switch(link):
+            logging.info('Switched to %s.', link.ifname)
+            mihf.discover(link)
+        else:
+            logging.info('Failed to switch to to %s.', link.ifname)
+        
 
 def main():
     import sys
@@ -83,7 +64,10 @@ def main():
     if args.server:
         f = mihf.ServerMihf(lambda a, b, c: None)
     else:
-        f = mihf.ClientMihf(client_user)
+        f = mihf.ClientMihf({
+            'local': client_local_link_handler,
+            'remote': client_remote_link_handler
+            })
 
     f.run()
 

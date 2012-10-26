@@ -1,3 +1,4 @@
+# vim: ts=8 sts=4 sw=4 et nu
 
 import os
 import collections
@@ -77,15 +78,32 @@ def make_link(**kwargs):
 
 
 class Link(object):
+
     def __init__(self, **kwargs):
         
         # Callbacks
         self.on_link_event = None
 
         self.state = None # force link_up on first poll()
+        self.ipaddr = ''
 
         self.update(**kwargs)
         #self.poll()
+
+
+    @property
+    def wifi(self):
+        return self.technology == 'wifi'
+
+
+    @property
+    def mobile(self):
+        return self.technology == 'mobile'
+
+
+    @property
+    def wired(self):
+        return self.technology == 'wired'
 
     
     def __repr__(self):
@@ -119,34 +137,20 @@ class Link(object):
         else:
             self._poll_mac()
 
-
-    def _poll_mac(self):
-        with open('/sys/class/net/'+self.ifname+'/address') as f:
-            self.macaddr = f.readline().strip()
-        pass
-
-
-    def _poll_ipv4(self):
-        matches = util.match_output('inet ([^/]+)', 'ip -4 -o addr show '+self.ifname)
-        self.ipaddr = matches[0] if matches else None
+    
+    def _poll_ifconf(self):
+        ifconf = sockios.get_ifconf(self.ifname);
+        self.macaddr = ifconf['hw_addr']
+        self.ipaddr  = ifconf['in_addr']
 
 
     def poll(self):
         if self.remote:
             return
 
-        before = self.state
+        self._poll_ifconf()
 
-        # Link state
-        #matches = util.match_output('Link detected: (yes|no)', 'ethtool ' + self.ifname)
-        #self.state = matches and matches[0] == 'yes'
-        #matches = util.match_output('state (UP|DOWN)', 'ip addr show dev ' + self.ifname)
-        #self.state = matches and matches[0] == 'UP'
-
-        self.state = sockios.is_up(self.ifname)
-
-        if before != self.state:
-            self._poll_ipv4()
+        self.state = sockios.is_up(self.ifname) and self.ipaddr
 
 
     def poll_and_notify(self):
@@ -173,14 +177,11 @@ class Link(object):
         if self.is_ready():
             return True
 
-        #cmd = 'ip link set up dev '+self.ifname
-        #success = (subproc.call(shlex.split(cmd)) == 0)
-        
         sockios.set_up(self.ifname)
 
         self.poll()
 
-        return success and self.state
+        return self.state
 
     
     def down(self):
@@ -224,10 +225,9 @@ class Link(object):
 
 
 class Link80203(Link):
+
     def __init__(self, **kwargs):
-        self.wired  = True
-        self.wifi   = False
-        self.mobile = False
+        self.technology = 'wired'
 
         super(Link80203, self).__init__(**kwargs)
 
@@ -274,15 +274,10 @@ class Link80203(Link):
         
         return success and self.is_ready()
 
-#    def down(self):
-#        pass
-
 
 class Link80211(Link):
     def __init__(self, **kwargs):
-        self.wired  = False
-        self.wifi   = True
-        self.mobile = False
+        self.technology = 'wifi'
 
         super(Link80211, self).__init__(**kwargs)
 
@@ -370,9 +365,7 @@ class Link80211(Link):
 class LinkMobile(Link):
 
     def __init__(self, **kwargs):
-        self.wired  = False
-        self.wifi   = False
-        self.mobile = True
+        self.technology = 'mobile'
 
         if not kwargs.get('remote'):
 
@@ -400,7 +393,7 @@ class LinkMobile(Link):
 
         if self.remote:
             self.strenght =  kwargs.pop('strenght', -1)
-   
+ 
 
     def _poll_mac(self):
         if self.ifname:
@@ -429,7 +422,6 @@ class LinkMobile(Link):
 
     def poll_and_notify(self):
         super(LinkMobile, self).poll_and_notify()
-
 
   
     def _enable(self, enable):
@@ -510,6 +502,7 @@ class LinkMobile(Link):
 
         return True
 
+
     def _connect(self):
         """Register the device with a network provider."""
 
@@ -531,6 +524,7 @@ class LinkMobile(Link):
 
             time.sleep(0.1)
         return False
+
 
     def _disconnect(self):
         """Disconnect packet data connections."""

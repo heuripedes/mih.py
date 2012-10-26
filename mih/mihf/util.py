@@ -79,8 +79,6 @@ def accept(sock):
 
     return csock
 
-def iface_up(ifname):
-    import platform
 
 def dhcp_release(ifname):
     retcode = False
@@ -135,4 +133,44 @@ def set_blocking(fd, blocking):
     flags = fcntl.fcntl(fd, fcntl.F_GETFL)
     flags = os.O_NONBLOCK * (blocking == False)
     fcntl.fcntl(fd, fcntl.F_SETFL, flags)
+
+def link_value(link):
+    """Calculates a value for the link using the given formula:
+          
+        v(l) = (w(l) + s(l)) * 2   if up(l) is true;
+                w(l) + s(l)        otherwise.
+        
+        v(l) = link value
+        w(l) = link weight (technology value/index)
+        s(l) = link signal strenght"""
+    
+    weight = {
+            'mobile': 1,
+            'wifi':   2,
+            'wired':  3
+            }
+
+    value = weight[link.technology] * 10000 + link.strenght
+    value += value * link.is_ready() # double if link is up
+
+    return value
+
+def link_compare(a,b):
+    """Compares two links. Returns -1, 0 or 1 depending on whether the *a* 
+    link is considered worse, similar or better than *b*."""
+    
+    # wired > anything
+    if not a.wifi and not a.mobile and (b.wifi or b.mobile):
+        return 1
+
+    # wifi > mobile
+    if a.wifi and b.mobile:
+        return 1
+
+    # if its the same tech, signal strenght decides who's better
+    if type(a) == type(b):
+            delta = a.strenght - b.strenght
+            return delta/abs(delta) if delta != 0 else 0
+
+    return 0
 
