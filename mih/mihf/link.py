@@ -86,6 +86,7 @@ class Link(object):
 
         self.state = None # force link_up on first poll()
         self.ipaddr = ''
+        self.discoverable = True
 
         self.update(**kwargs)
         #self.poll()
@@ -135,7 +136,7 @@ class Link(object):
             self.state    =  kwargs.pop('state', False)
 
         else:
-            self._poll_mac()
+            self._poll_ifconf()
 
     
     def _poll_ifconf(self):
@@ -360,11 +361,13 @@ class Link80211(Link):
                 util.average(self.samples) < WIFI_THRESHOLD)
 
 
-# TODO: look in https://github.com/openshine/ModemManager/blob/master/test/mm-test.py
-#       for inspiration
+# XXX: based on https://github.com/openshine/ModemManager/blob/master/test/mm-test.py
 class LinkMobile(Link):
 
     def __init__(self, **kwargs):
+
+        self.discoverable = False
+
         self.technology = 'mobile'
 
         if not kwargs.get('remote'):
@@ -395,9 +398,9 @@ class LinkMobile(Link):
             self.strenght =  kwargs.pop('strenght', -1)
  
 
-    def _poll_mac(self):
+    def _poll_ifconf(self):
         if self.ifname:
-            super(LinkMobile, self)._poll_mac()
+            super(LinkMobile, self)._poll_ifconf()
 
 
     def poll(self):

@@ -72,6 +72,9 @@ class LocalMihf(BasicMihf):
 
     def discover(self, link):
 
+        if not link.discoverable:
+            return
+
         if not isinstance(link, str):
             link = link.ifname
 
@@ -330,6 +333,7 @@ class ClientMihf(LocalMihf):
             self._peers[msg.smihf] = peer
 
 
+
 class ServerMihf(LocalMihf):
    
     def __init__(self, handler, port=12345):
@@ -370,5 +374,10 @@ class ServerMihf(LocalMihf):
             
             self._send(msg.smihf, 'mih_discovery.response',
                     self._export_links(), parent=msg.id, daddr=srcaddr)
+
+        if msg.kind == 'mih_report.request':
+            self._send(msg.smihf, 'mih_report.response',
+                    self._export_links(), parent=msg.id, daddr=srcaddr)
+
 
         

@@ -62,7 +62,10 @@ def main():
     f = None
 
     if args.server:
-        f = mihf.ServerMihf(lambda a, b, c: None)
+        f = mihf.ServerMihf({
+            'local': lambda a, b, c, d: None,
+            'remote': lambda a, b, c, d: None,
+            })
     else:
         f = mihf.ClientMihf({
             'local': client_local_link_handler,
