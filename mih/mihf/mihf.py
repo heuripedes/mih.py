@@ -124,7 +124,7 @@ class LocalMihf(BasicMihf):
         assert daddr or (not daddr and dmihf)
 
         if not daddr:
-            daddr = self._peers[dmihf]
+            daddr = self._peers[dmihf].addr
 
         msg = Message(
                 smihf=self._name, dmihf=dmihf,
@@ -297,6 +297,8 @@ class ClientMihf(LocalMihf):
     def __init__(self, handler, port=12345):
         super(ClientMihf, self).__init__(handler, port)
 
+        # TODO: add variable to hold mih_report result until read.
+
     def run(self):
         logging.info('Starting client MIHF %s', self._name)
 
@@ -315,6 +317,18 @@ class ClientMihf(LocalMihf):
                         break
 
             self._flush_buffer()
+
+    def report(self, links=[]):
+        if not links:
+            links = self._links.keys()
+
+        # Remote links only
+        links = [link for link in links if self._links[link].remote]
+       
+        # Broadcast to the known servers
+        for peer in self._peers:
+            self._send(peer, 'mih_report.request', payload=links)
+        
 
     def _handle_message(self, srcaddr, msg):
         
