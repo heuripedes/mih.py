@@ -297,7 +297,7 @@ class ClientMihf(LocalMihf):
     def __init__(self, handler, port=12345):
         super(ClientMihf, self).__init__(handler, port)
 
-        # TODO: add variable to hold mih_report result until read.
+        self.last_report = None
 
     def run(self):
         logging.info('Starting client MIHF %s', self._name)
@@ -345,7 +345,25 @@ class ClientMihf(LocalMihf):
                 logging.info('Remote link found: %s', link)
 
             self._peers[msg.smihf] = peer
+        
+        if msg.kind == 'mih_report.response':
+            if msg.smihf not in self._peers:
+                return
+            
+            logging.info('Received report from %s.', msg.smihf)
 
+            if self.last_report:
+                logging.info('Ignoring report from %s.', msg.smihf)
+                return
+            
+            peer = self._peers[msg.smihf]
+            peer.import_links(msg.payload)
+
+            links = []
+            for link in msg.payload:
+                links += [Link(link)]
+
+            self.last_report = links
 
 
 class ServerMihf(LocalMihf):
