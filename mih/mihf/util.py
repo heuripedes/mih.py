@@ -38,8 +38,8 @@ def unpickle(pickled):
     return cPickle.loads(pickled)
 
 
-def pickle(object):
-    return pickletools.optimize(cPickle.dumps(object))
+def pickle(obj):
+    return pickletools.optimize(cPickle.dumps(obj))
 
 
 def normalize(s):
@@ -121,7 +121,7 @@ def link_value(link):
 
     return value
 
-def link_compare(a,b):
+def link_compare(a, b):
     """Compares two links. Returns -1, 0 or 1 depending on whether the *a* 
     link is considered worse, similar or better than *b*."""
     

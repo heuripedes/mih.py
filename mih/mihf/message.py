@@ -1,6 +1,6 @@
 # vim: ts=8 sts=4 sw=4 et nu
 
-import util
+import mih.mihf.util as util
 
 # TODO: generate/store message ids for each request
 # TODO: store discovery responses
@@ -28,14 +28,14 @@ class Message(object):
         return 'Message(%s)' % s.rstrip(', ')
 
     def __getstate__(self):
-        dict = self.__dict__.copy()
-        for k, v in dict.items():
+        dic = self.__dict__.copy()
+        for k in dic.keys():
             if k.startswith('_'):
-                del dict[k]
+                del dic[k]
 
         return dict
 
-    def __setstate__(self, dict):
-        self.__dict__.update(dict)
+    def __setstate__(self, dic):
+        self.__dict__.update(dic)
 
 

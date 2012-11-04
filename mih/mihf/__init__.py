@@ -1,2 +1,3 @@
 
-from mihf import *
+from mih.mihf import *
+

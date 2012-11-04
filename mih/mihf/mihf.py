@@ -8,9 +8,9 @@ import errno
 
 import collections
 
-import util
-from link import *
-from message import Message
+import mih.mihf.util as util
+from mih.mihf.link import *
+from mih.mihf.message import Message
 
 class BasicMihf(object):
     """This class describes the common operations that all MIHFs classes 
@@ -22,30 +22,30 @@ class BasicMihf(object):
     # accessors
     @property
     def links(self):
-        return self._links.values()
+        return getattr(self, '_links').values()
     
     @property
     def name(self):
-        return self._name
+        return getattr(self, '_name')
 
     # MIH Commands
     def discover(self, link):
         """Broadcasts a server discovery request throught *link*. *link* 
         can either be a Link instance or a string containing the interface 
         name."""
-        raise NotImplemented
+        raise NotImplementedError
 
     def switch(self, link):
         """Switches to the link described by *link*."""
-        raise NotImplemented
+        raise NotImplementedError
 
     def report(self, links=[]):
         """Return information about the links in *links*."""
-        raise NotImplemented
+        raise NotImplementedError
 
 
 class LocalMihf(BasicMihf):
-    def __init__(self, handler, port=12345, peek_time=10, msg_size=8192, max_recv=10):
+    def __init__(self, handler, port=12345, peek_time=10, msg_size=4096, max_recv=10):
         super(LocalMihf, self).__init__()
 
         self._name    = util.gen_id('MIHF-')
@@ -57,7 +57,7 @@ class LocalMihf(BasicMihf):
         self._port    = port
         self._next_peek = time.time()
         self._peek_time = peek_time
-        self._msg_size = 4096
+        self._msg_size = msg_size
         self._max_recv = max_recv
 
         self._next_refresh = time.time()-1
@@ -86,7 +86,7 @@ class LocalMihf(BasicMihf):
 
     def switch(self, link):
         
-        logging.debug('Switching from %s to %s', self._curlink, link);
+        logging.debug('Switching from %s to %s', self._curlink, link)
 
         if not link.up():
             link.down()
@@ -102,7 +102,7 @@ class LocalMihf(BasicMihf):
 
         return True
     
-    def _make_socket(self, bind=False, blocking=False, timeout=0.3):
+    def _make_socket(self, bind=False, blocking=True, timeout=0.3):
 
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
@@ -115,7 +115,7 @@ class LocalMihf(BasicMihf):
         # XXX: using select() with blocking sockets lowers the CPU usage for
         #      some reason.
 
-        #self._sock.setblocking(blocking)
+        self._sock.setblocking(blocking)
         self._sock.settimeout(timeout)
 
     def _send(self, dmihf, kind, payload=None, parent=None, daddr=None, link=None):
@@ -157,7 +157,6 @@ class LocalMihf(BasicMihf):
 
                 except socket.timeout:
                     attempts -= 1
-                    pass
 
             if not attempts:
                 logging.warning('Failed to send message to %s: too many timeouts', msg.daddr)
@@ -255,7 +254,7 @@ class LocalMihf(BasicMihf):
         return ready
 
     def _peek_links(self):
-        wifi = filter(lambda link: link.wifi, g.links)
+        wifi = filter(lambda link: link.wifi, self._links)
 
         for name, link in wifi.items():
             if not link.up():

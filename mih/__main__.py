@@ -1,8 +1,8 @@
 #!/usr/bin/env python2.7
 # vim: ts=8 sts=4 sw=4 et nu
 
-import mihf
-import mihf.util as util
+from mih.mihf import mihf
+from mih.mihf import util
 import logging
 
 def client_remote_link_handler(mihf, link, status, scope):
@@ -21,14 +21,14 @@ def client_local_link_handler(mihf, link, state, scope):
         up_links = [l for l in mihf.links if l.is_ready()]
 
         # Switch to the better up link
-        if up_links:
+        if not up_links:
             logging.warning('No suitable link to fallback.')
             return
         
-            better = sorted(up_links, util.link_compare)[0]
+        better = sorted(up_links, util.link_compare)[0]
 
-            if mihf.switch(better):
-                logging.info('Switched to %s.', better.ifname)
+        if mihf.switch(better):
+            logging.info('Switched to %s.', better.ifname)
         
         # Find an alternative technology link related to server's link report
         elif (not up_links) and (mihf.last_report):
@@ -82,7 +82,7 @@ def main():
     )
 
     f = None
-
+    
     if args.server:
         f = mihf.ServerMihf({
             'local': lambda a, b, c, d: None,

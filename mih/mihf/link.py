@@ -6,14 +6,14 @@ import errno
 import shlex
 import subprocess as subproc
 import re
-import util
 import time
+import dbus
 
 import sockios
 sockios.init()
 
-# ModemManager
-import mm
+import mih.mihf.util as util
+import mih.mihf.mm as mm
 
 # Interface properties
 
@@ -74,6 +74,7 @@ class Link(object):
         self.state = None # force link_up on first poll()
         self.ipaddr = ''
         self.discoverable = True
+        self.technology = 'unknown'
 
         self.update(**kwargs)
         #self.poll()
@@ -124,7 +125,7 @@ class Link(object):
 
     
     def _poll_ifconf(self):
-        ifconf = sockios.get_ifconf(self.ifname);
+        ifconf = sockios.get_ifconf(self.ifname)
         self.macaddr = ifconf['hw_addr']
         self.ipaddr  = ifconf['in_addr']
 
@@ -383,7 +384,7 @@ class LinkMobile(Link):
             return
         
         self.state = (self._modem.State == mm.MM_MODEM_STATE_CONNECTED)
-        if not state:
+        if not self.state:
             return
         
         status = self._modem.GetStatus()
