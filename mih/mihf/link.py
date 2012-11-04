@@ -45,19 +45,6 @@ def get_local_ifnames():
 
     return ifnames
 
-#def get_modems():
-#    modems = mm.ModemManager.EnumerateDevices()
-#    for m in modems:
-#        print m + ":"
-#        
-#        import pprint
-#        link = make_link(ifname=m)
-#        link.up()
-#        pprint.pprint(link.as_dict())
-#        link.down()
-#        os.abort()
-#
-#    return modems
 
 def make_link(**kwargs):
     if kwargs.get('remote', False):
@@ -116,8 +103,6 @@ class Link(object):
         if not kwargs:
             kwargs = args[0]
             
-        #self.wifi, self.wired, self.mobile = False, False, False
-        
         if not hasattr(self, 'remote'):
             self.remote = kwargs.pop('remote', False)
 
@@ -131,7 +116,6 @@ class Link(object):
             self._ready = kwargs.pop('ready', False)
 
             # Remote link information is mostly static
-            #self.macaddr = kwargs.pop('macaddr', None)
             self.ipaddr  = kwargs.pop('ipaddr', None)
             self.state    =  kwargs.pop('state', False)
 
@@ -236,21 +220,12 @@ class Link80203(Link):
     def update(self, *args, **kwargs):
         super(Link80203, self).update(*args, **kwargs)
 
-        #if self.remote:
-        #    self.carrier = kwargs.pop('carrier', False)
-
 
     def poll(self):
 
         super(Link80203, self).poll()
 
         if self.state:
-            # XXX: is the carrier information really needed?
-            ## XXX: one exception might originate here if the interface
-            ##      goes down before the read completes.
-            #with open('/sys/class/net/'+self.ifname+'/carrier') as f:
-            #    self.carrier = f.readline().strip() == '1'
-            
             self.strenght = WIRED_UP_STRENGHT
         else:
             self.strenght = WIRED_DOWN_STRENGHT
@@ -470,7 +445,7 @@ class LinkMobile(Link):
             print 'Failed to run pppd: %s' % e
             return False
      
-        # non-blockign stdout
+        # non-blocking stdout
         util.set_blocking(self._pppd.stdout.fileno(), False)
         
         attempts = 200 # 20 secs

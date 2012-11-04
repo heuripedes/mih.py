@@ -39,8 +39,3 @@ class Message(object):
         self.__dict__.update(dict)
 
 
-
-    #def __getitem__(self, key):
-    #    keys = ['id', 'parent', 'kind', 'src', 'dst', 'payload']
-    #    return getattr(self, keys[key])
-
