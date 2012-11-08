@@ -8,6 +8,7 @@ import subprocess as subproc
 import re
 import time
 import dbus
+import logging
 
 import sockios
 sockios.init()
@@ -40,7 +41,7 @@ def get_local_ifnames():
 
     # Local common interfaces pci/amr/virtual/etc
     prefixes = ('lo', 'virbr', 'vboxnet', 'ppp0')
-    ifnames  = filter(lambda name: not name.startswith(prefixes), sockios.get_iflist())
+    ifnames  = [name for name in sockios.get_iflist() if not name.startswith(prefixes)]
     ifnames += mm.ModemManager.EnumerateDevices()
 
     return ifnames
@@ -48,11 +49,12 @@ def get_local_ifnames():
 
 def make_link(**kwargs):
     if kwargs.get('remote', False):
-        if kwargs.get('wired'):
+        tech = kwargs.get('technology')
+        if tech == 'wired':
             return Link80203(**kwargs)
-        elif kwargs.get('wifi'):
+        elif tech == 'wifi':
             return Link80211(**kwargs)
-        elif kwargs.get('mobile'):
+        elif tech == 'mobile':
             return LinkMobile(**kwargs)
    
     ifname = kwargs.get('ifname')
@@ -71,6 +73,8 @@ class Link(object):
         # Callbacks
         self.on_link_event = None
 
+        self.remote = False
+
         self.state = None # force link_up on first poll()
         self.ipaddr = ''
         self.discoverable = True
@@ -80,18 +84,15 @@ class Link(object):
         #self.poll()
 
 
-    @property
-    def wifi(self):
+    def is_wired(self):
         return self.technology == 'wifi'
 
 
-    @property
-    def mobile(self):
+    def is_mobile(self):
         return self.technology == 'mobile'
 
 
-    @property
-    def wired(self):
+    def is_wired(self):
         return self.technology == 'wired'
 
     
@@ -100,30 +101,16 @@ class Link(object):
                 (self.__class__.__name__, self.ifname, self.__dict__.get('ipaddr'))
 
 
-    def update(self, *args, **kwargs):
-        if not kwargs:
-            kwargs = args[0]
-            
-        if not hasattr(self, 'remote'):
-            self.remote = kwargs.pop('remote', False)
-
-        if not hasattr(self, 'name'):
-            self.name   = kwargs.pop('name', None)
-
-        if not hasattr(self, 'ifname'):
-            self.ifname =  kwargs.pop('ifname') # for now, required.
-
-        if self.remote: 
-            self._ready = kwargs.pop('ready', False)
-
-            # Remote link information is mostly static
-            self.ipaddr  = kwargs.pop('ipaddr', None)
-            self.state    =  kwargs.pop('state', False)
-
+    def update(self, **kwargs):
+        vars(self).update(kwargs)
+        
+        if self.remote and hasattr(self, 'ready'):
+            self._ready = self.ready
+            del self.ready
         else:
             self._poll_ifconf()
+   
 
-    
     def _poll_ifconf(self):
         ifconf = sockios.get_ifconf(self.ifname)
         self.macaddr = ifconf['hw_addr']
@@ -131,17 +118,14 @@ class Link(object):
 
 
     def poll(self):
-        if self.remote:
-            return
+        assert not self.remote
 
         self._poll_ifconf()
-
-        self.state = sockios.is_up(self.ifname) and self.ipaddr
+        self.state = sockios.is_up(self.ifname)
 
 
     def poll_and_notify(self):
-        if self.remote:
-            return
+        assert not self.remote
 
         before = self.is_ready()
 
@@ -160,12 +144,10 @@ class Link(object):
     def up(self):
         assert not self.remote
 
-        if self.is_ready():
-            return True
+        if not self.state:
+            sockios.set_up(self.ifname)
 
-        sockios.set_up(self.ifname)
-
-        self.poll()
+            self.poll()
 
         return self.state
 
@@ -173,29 +155,24 @@ class Link(object):
     def down(self):
         assert not self.remote
 
-        # This link is already down, nothing to do here.
-        if not self.state:
-            return True
+        if self.state:
+            util.dhcp_release(self.ifname)
 
-        util.dhcp_release(self.ifname)
+            subproc.call(['ip','addr','flush','dev',self.ifname])
 
-        cmd = shlex.split('ip addr flush dev '+self.ifname)
-        success = (subproc.call(cmd) == 0)
+            sockios.set_down(self.ifname)
 
-        cmd = shlex.split('ip link set down dev '+self.ifname)
-        success = (subproc.call(cmd) == 0)
+            self.poll()
 
-        self.poll()
-
-        if success and not self.is_ready() and self.on_link_event:
-            self.on_link_event(self, 'down')
+            if not self.state and self.on_link_event:
+                self.on_link_event(self, 'down')
         
-        return success
+        return not self.state
 
 
     def is_ready(self):
         return (getattr(self, '_ready', False) or
-                (self.state and self.ipaddr is not None))
+                (self.state and self.ipaddr))
 
 
     def as_dict(self):
@@ -223,7 +200,6 @@ class Link80203(Link):
 
 
     def poll(self):
-
         super(Link80203, self).poll()
 
         if self.state:
@@ -259,32 +235,34 @@ class Link80211(Link):
         super(Link80211, self).__init__(**kwargs)
 
 
-    def update(self, *args, **kwargs):
-        super(Link80211, self).update(*args, **kwargs)
+    def update(self, **kwargs):
+        super(Link80211, self).update(**kwargs)
 
-        # Reset sampling 
-        self.strenght = 0
-        self.samples  = collections.deque(maxlen=WIFI_SAMPLES)
-
-        if self.remote:
-            self.strenght =  kwargs.pop('strenght', -1)
+        if not self.remote:
+            # Reset sampling 
+            self.strenght = 0
+            self.samples  = collections.deque(maxlen=WIFI_SAMPLES)
 
 
     def poll(self):
         super(Link80211, self).poll()
 
         # Collect signal strenght samples
-        if not self.is_ready():
+        if self.is_ready():
+            try:
+                with open('/sys/class/net/'+self.ifname+'/wireless/link') as f:
+                    self.strenght = int(f.readline().strip())
+                    self.samples.append(self.strenght)
+
+                matches = util.match_output('ESSID:"([^"$]+)', 'iwconfig '+ self.ifname)
+                self.essid = matches[0].strip()
+            except e:
+                logging.warning('Failed to query signal strenght: %s', e)
+
+        else:
             self.strenght = 0
             self.samples.clear()
             self.essid = None
-        else:
-            with open('/sys/class/net/'+self.ifname+'/wireless/link') as f:
-                self.strenght = int(f.readline().strip())
-                self.samples.append(self.strenght)
-
-            matches = util.match_output('ESSID:"([^"$]+)', 'iwconfig '+ self.ifname)
-            self.essid = matches[0].strip()
    
 
     def poll_and_notify(self):
@@ -333,7 +311,7 @@ class Link80211(Link):
         return success
 
     def is_going_down(self):
-        return (self.wifi and len(self.samples) == WIFI_SAMPLES and
+        return (self.is_wifi() and len(self.samples) == WIFI_SAMPLES and
                 util.average(self.samples) < WIFI_THRESHOLD)
 
 

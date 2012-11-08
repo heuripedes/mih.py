@@ -95,7 +95,7 @@ class LocalMihf(BasicMihf):
         if self._curlink:
             self._curlink.down()
         
-        if link.mobile:
+        if link.is_mobile():
             self._next_peek = time.time() + self._peek_time
 
         self._curlink = link
@@ -243,7 +243,7 @@ class LocalMihf(BasicMihf):
             if link.is_ready():
                 ready.append(link)
 
-        on_mobile = self._curlink and self._curlink.mobile 
+        on_mobile = self._curlink and self._curlink.is_mobile() 
 
         if on_mobile and time.time() > self._next_peek:
             self._peek_links()
@@ -254,7 +254,7 @@ class LocalMihf(BasicMihf):
         return ready
 
     def _peek_links(self):
-        wifi = filter(lambda link: link.wifi, self._links)
+        wifi = filter(lambda link: link.is_wifi(), self._links)
 
         for name, link in wifi.items():
             if not link.up():

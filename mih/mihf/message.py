@@ -33,7 +33,7 @@ class Message(object):
             if k.startswith('_'):
                 del dic[k]
 
-        return dict
+        return dic
 
     def __setstate__(self, dic):
         self.__dict__.update(dic)
