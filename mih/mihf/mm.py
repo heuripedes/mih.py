@@ -83,6 +83,6 @@ class Modem(object):
     def GetInfo(self):
         return self._modem.GetInfo()
 
-    def Return(self):
-        return self._modem.Return()
+    def Reset(self):
+        return self._modem.Reset()
     
