@@ -18,9 +18,10 @@ def client_local_link_handler(mihf, link, state, scope):
 
     # Try to switch if the current link is down.
     elif current == link and state == 'down':
+        print 'current down.'
 
         # Switch to an up link if we can
-        up_links = [l for l in mihf.links if l.is_ready()]
+        up_links = [l for l in mihf.links.values() if l.is_ready()]
 
         if up_links:
             better = sorted(up_links, util.link_compare)[0]

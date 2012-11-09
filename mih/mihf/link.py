@@ -78,7 +78,7 @@ class Link(object):
         self.discoverable = True
         self.technology = 'unknown'
 
-        self.on_link_event = lambda _,_: None # callbacks
+        self.on_link_event = None # callbacks
 
         self.update(**kwargs)
         #self.poll()
@@ -172,7 +172,7 @@ class Link(object):
 
     def is_ready(self):
         return (getattr(self, '_ready', False) or
-                (self.state and self.ipaddr))
+                (self.state and len(self.ipaddr)))
 
 
     def as_dict(self):
@@ -202,7 +202,7 @@ class Link80203(Link):
     def poll(self):
         super(Link80203, self).poll()
 
-        if self.state:
+        if self.state and self.ipaddr:
             self.strenght = WIRED_UP_STRENGHT
         else:
             self.strenght = WIRED_DOWN_STRENGHT

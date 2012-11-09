@@ -53,9 +53,10 @@ class LocalMihf(BasicMihf):
 
         self._peers   = dict()
         self._handler = handler
-        self._next_peek = time.time()
 
+        self._next_peek = time.time()
         self._next_refresh = time.time()-1
+
         self._ready_cache  = list()
 
         self._oqueue = collections.deque()
@@ -221,7 +222,7 @@ class LocalMihf(BasicMihf):
 
     def _refresh_links(self):
         """Refreshes the MIHF link list."""
-
+        
         if self._next_refresh < time.time():
             self._next_refresh = time.time() + 0.5 # 500 ms
         else:
@@ -229,7 +230,7 @@ class LocalMihf(BasicMihf):
 
         ready = []
 
-        for link in self.links.itervalues():
+        for link in self.links.values():
             link.poll_and_notify()
 
             if link.is_ready():
@@ -262,9 +263,9 @@ class RemoteMihf(BasicMihf):
     def __init__(self, name, addr, links=dict()):
         super(RemoteMihf, self).__init__()
         
-        self.name  = name
-        self._addr  = addr
-        self.links = links
+        self._addr = addr
+        self._name  = name
+        self._links = links
 
     @property
     def addr(self):
@@ -272,21 +273,21 @@ class RemoteMihf(BasicMihf):
 
     @property
     def links(self):
-        return self.links.values()
+        return self._links.values()
 
     @links.setter
     def links(self, links):
-        self.links = links
+        self._links = links
 
     def import_links(self, links):
         for link in links:
-            self.links[link['ifname']] = Link(**link)
+            self._links[link['ifname']] = Link(**link)
 
 
 class ClientMihf(LocalMihf):
 
-    def __init__(self, handler, port=12345):
-        super(ClientMihf, self).__init__(handler, port)
+    def __init__(self, handler):
+        super(ClientMihf, self).__init__(handler)
 
         self.last_report = None
 
@@ -355,8 +356,8 @@ class ClientMihf(LocalMihf):
 
 class ServerMihf(LocalMihf):
    
-    def __init__(self, handler, port=12345):
-        super(ServerMihf, self).__init__(handler, port)
+    def __init__(self, handler):
+        super(ServerMihf, self).__init__(handler)
 
     def switch(self, link):
         logging.warning('Attempted to switch MIHF server link.')
