@@ -19,15 +19,6 @@ class BasicMihf(object):
     def __init__(self):
         pass
 
-    # accessors
-    @property
-    def links(self):
-        return getattr(self, '_links').values()
-    
-    @property
-    def name(self):
-        return getattr(self, '_name')
-
     # MIH Commands
     def discover(self, link):
         """Broadcasts a server discovery request throught *link*. *link* 
@@ -39,26 +30,27 @@ class BasicMihf(object):
         """Switches to the link described by *link*."""
         raise NotImplementedError
 
-    def report(self, links=[]):
+    def report(self):
         """Return information about the links in *links*."""
         raise NotImplementedError
 
 
 class LocalMihf(BasicMihf):
-    def __init__(self, handler, port=12345, peek_time=10, msg_size=4096, max_recv=10):
+    MSG_SIZE = 4096
+    MAX_RECV = 10
+    PEEK_TIME = 10
+
+    def __init__(self, handler, port=12345):
         super(LocalMihf, self).__init__()
 
-        self._name    = util.gen_id('MIHF-')
+        self.name    = util.gen_id('MIHF-')
         self._curlink = None
-        self._links   = dict()
+        self.links   = dict()
         self._peers   = dict()
         self._sock    = None
         self._handler = handler
         self._port    = port
         self._next_peek = time.time()
-        self._peek_time = peek_time
-        self._msg_size = msg_size
-        self._max_recv = max_recv
 
         self._next_refresh = time.time()-1
         self._ready_cache  = list()
@@ -96,7 +88,7 @@ class LocalMihf(BasicMihf):
             self._curlink.down()
         
         if link.is_mobile():
-            self._next_peek = time.time() + self._peek_time
+            self._next_peek = time.time() + self.PEEK_TIME
 
         self._curlink = link
 
@@ -127,7 +119,7 @@ class LocalMihf(BasicMihf):
             daddr = self._peers[dmihf].addr
 
         msg = Message(
-                smihf=self._name, dmihf=dmihf,
+                smihf=self.name, dmihf=dmihf,
                 kind=kind, payload=payload, parent=parent,
                 daddr=daddr
                 )
@@ -152,7 +144,7 @@ class LocalMihf(BasicMihf):
             
             while not sent and attempts:
                 try: 
-                    data = util.pickle(msg).ljust(self._msg_size, '\x00')
+                    data = util.pickle(msg).ljust(self.MSG_SIZE, '\x00')
                     sent += self._sock.sendto(data, 0, msg.daddr)
 
                 except socket.timeout:
@@ -167,14 +159,14 @@ class LocalMihf(BasicMihf):
     def _fill_buffer(self):
         """Fills the input queue."""
 
-        count = self._max_recv
+        count = self.MAX_RECV
 
         while count:
             
             data, addr = '', (None, None)
 
             try:
-                data, addr = self._sock.recvfrom(self._msg_size)
+                data, addr = self._sock.recvfrom(self.MSG_SIZE)
             except socket.timeout:
                 break
 
@@ -200,7 +192,7 @@ class LocalMihf(BasicMihf):
 
         exported = []
 
-        for link in self._links.values():
+        for link in self.links.values():
             d = link.as_dict()
             d['remote'] = True
             
@@ -212,19 +204,19 @@ class LocalMihf(BasicMihf):
         """Checks for newly added interfaces and removes unexistent ones."""
         
         llnames = get_local_ifnames()
-        new  = list(set(llnames) - set(self._links.keys()))
-        dead = list(set(self._links.keys()) - set(llnames))
+        new  = list(set(llnames) - set(self.links.keys()))
+        dead = list(set(self.links.keys()) - set(llnames))
 
         for name in dead:
             # XXX: send link down?
             logging.warning('Local link not found %s', name)
-            del self._links[name]
+            del self.links[name]
 
         for name in new:
             logging.debug('Found link %s.', name)
             link = make_link(ifname=name)
             link.on_link_event = self._handle_link_event
-            self._links[name] = link
+            self.links[name] = link
 
 
     def _refresh_links(self):
@@ -237,7 +229,7 @@ class LocalMihf(BasicMihf):
 
         ready = []
 
-        for name, link in self._links.items():
+        for link in self.links.itervalues():
             link.poll_and_notify()
 
             if link.is_ready():
@@ -247,14 +239,14 @@ class LocalMihf(BasicMihf):
 
         if on_mobile and time.time() > self._next_peek:
             self._peek_links()
-            self._next_peek += self._peek_time
+            self._next_peek += self.PEEK_TIME
 
         self._ready_cache = ready
 
         return ready
 
     def _peek_links(self):
-        wifi = filter(lambda link: link.is_wifi(), self._links)
+        wifi = filter(lambda link: link.is_wifi(), self.links)
 
         for name, link in wifi.items():
             if not link.up():
@@ -270,9 +262,9 @@ class RemoteMihf(BasicMihf):
     def __init__(self, name, addr, links=dict()):
         super(RemoteMihf, self).__init__()
         
-        self._name  = name
+        self.name  = name
         self._addr  = addr
-        self._links = links
+        self.links = links
 
     @property
     def addr(self):
@@ -280,15 +272,15 @@ class RemoteMihf(BasicMihf):
 
     @property
     def links(self):
-        return self._links.values()
+        return self.links.values()
 
     @links.setter
     def links(self, links):
-        self._links = links
+        self.links = links
 
     def import_links(self, links):
         for link in links:
-            self._links[link['ifname']] = Link(**link)
+            self.links[link['ifname']] = Link(**link)
 
 
 class ClientMihf(LocalMihf):
@@ -299,7 +291,7 @@ class ClientMihf(LocalMihf):
         self.last_report = None
 
     def run(self):
-        logging.info('Starting client MIHF %s', self._name)
+        logging.info('Starting client MIHF %s', self.name)
 
         self._make_socket()
         self._scan_links()
@@ -311,21 +303,17 @@ class ClientMihf(LocalMihf):
             ready = self._refresh_links()
 
             if not ready:
-                for link in self._links.values():
+                for link in self.links.values():
                     if self.switch(link):
                         break
 
             self._flush_buffer()
 
-    def report(self, links=[]):
-        if not links:
-            links = self._links.keys()
-
-        # Remote links only
-        links = [link for link in links if self._links[link].remote]
-       
+    def report(self):
+        
         # Broadcast to the known servers
         for peer in self._peers:
+            links = self._peers[peer].links.keys()
             self._send(peer, 'mih_report.request', payload=links)
         
 
@@ -377,7 +365,7 @@ class ServerMihf(LocalMihf):
         logging.warning('Attempted to run peer discovery.')
 
     def run(self):
-        logging.info('Starting server MIHF %s', self._name)
+        logging.info('Starting server MIHF %s', self.name)
 
         self._make_socket(bind=True)
         self._scan_links()
@@ -388,8 +376,8 @@ class ServerMihf(LocalMihf):
 
             ready = self._refresh_links()
 
-            if len(ready) != len(self._links):
-                for link in (set(self._links.values()) ^ set(ready)):
+            if len(ready) != len(self.links):
+                for link in (set(self.links.values()) ^ set(ready)):
                     link.up()
 
             self._flush_buffer()

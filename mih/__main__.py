@@ -18,36 +18,35 @@ def client_local_link_handler(mihf, link, state, scope):
 
     # Try to switch if the current link is down.
     elif current == link and state == 'down':
+
+        # Switch to an up link if we can
         up_links = [l for l in mihf.links if l.is_ready()]
 
-        # Switch to the better up link
-        if not up_links:
-            logging.warning('No suitable link to fallback.')
-            return
-        
-        better = sorted(up_links, util.link_compare)[0]
+        if up_links:
+            better = sorted(up_links, util.link_compare)[0]
 
-        if mihf.switch(better):
-            logging.info('Switched to %s.', better.ifname)
-        
+            if mihf.switch(better):
+                logging.info('Switched to %s.', better.ifname)
+
         # Find an alternative technology link related to server's link report
-        elif (not up_links) and (mihf.last_report):
+        elif mih.last_report:
             up_links = [l for l in mihf.last_report if l.is_ready()]
 
             better = sorted(up_links, util.link_compare)
 
             for rlink in better:
-                if rlink.tech == current.tech:
+                if (rlink.tech == current.tech) or (not rlink.is_ready()):
                     continue
 
-                if rlink.is_ready():
-                    for link in mihf.links:
-                        if link.tech == rlink.tech:
-                            # Return if the switch succeeded
-                            if mihf.switch(link):
-                                logging.info('Switched to %s.', link.ifname)
-                                return
+                for link in mihf.links:
+                    if (link.tech == rlink.tech) and (mihf.switch(link)):
+                        logging.info('Switched to %s.', link.ifname)
+                        break
 
+        else:
+            logging.warning('No suitable link to fallback.')
+        
+        
     # Try to use the newly available link as main if we're not connected at 
     # the moment. Send discovery message if the switching succeed.
     elif not current and state == 'up':

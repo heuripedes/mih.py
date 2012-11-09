@@ -135,8 +135,8 @@ def link_compare(a, b):
 
     # if its the same tech, signal strenght decides who's better
     if type(a) == type(b):
-            delta = a.strenght - b.strenght
-            return delta/abs(delta) if delta != 0 else 0
+        delta = a.strenght - b.strenght
+        return delta/abs(delta) if delta != 0 else 0
 
     return 0
 
