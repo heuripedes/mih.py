@@ -39,17 +39,20 @@ class LocalMihf(BasicMihf):
     MSG_SIZE = 4096
     MAX_RECV = 10
     PEEK_TIME = 10
+    PORT = 12345
 
-    def __init__(self, handler, port=12345):
+    def __init__(self, handler):
         super(LocalMihf, self).__init__()
 
-        self.name    = util.gen_id('MIHF-')
-        self._curlink = None
-        self.links   = dict()
-        self._peers   = dict()
+        self.name  = util.gen_id('MIHF-')
+
+        self.links = dict()
+        self.current_link = None
+
         self._sock    = None
+
+        self._peers   = dict()
         self._handler = handler
-        self._port    = port
         self._next_peek = time.time()
 
         self._next_refresh = time.time()-1
@@ -58,10 +61,7 @@ class LocalMihf(BasicMihf):
         self._oqueue = collections.deque()
         self._iqueue = collections.deque()
 
-    @property
-    def current_link(self):
-        return self._curlink
-
+   
     def discover(self, link):
 
         if not link.discoverable:
@@ -72,25 +72,25 @@ class LocalMihf(BasicMihf):
 
         util.bind_sock_to_device(self._sock, link)
     
-        self._send(None, 'mih_discovery.request', daddr=('<broadcast>', self._port))
+        self._send(None, 'mih_discovery.request', daddr=('<broadcast>', self.PORT))
 
         util.bind_sock_to_device(self._sock, '')
 
     def switch(self, link):
         
-        logging.debug('Switching from %s to %s', self._curlink, link)
+        logging.debug('Switching from %s to %s', self.current_link, link)
 
         if not link.up():
             link.down()
             return False
         
-        if self._curlink:
-            self._curlink.down()
+        if self.current_link:
+            self.current_link.down()
         
         if link.is_mobile():
             self._next_peek = time.time() + self.PEEK_TIME
 
-        self._curlink = link
+        self.current_link = link
 
         return True
     
@@ -99,7 +99,7 @@ class LocalMihf(BasicMihf):
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         if bind:
-            self._sock.bind(('', self._port))
+            self._sock.bind(('', self.PORT))
 
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, True)
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, True)
@@ -235,7 +235,7 @@ class LocalMihf(BasicMihf):
             if link.is_ready():
                 ready.append(link)
 
-        on_mobile = self._curlink and self._curlink.is_mobile() 
+        on_mobile = self.current_link and self.current_link.is_mobile() 
 
         if on_mobile and time.time() > self._next_peek:
             self._peek_links()
@@ -248,7 +248,7 @@ class LocalMihf(BasicMihf):
     def _peek_links(self):
         wifi = filter(lambda link: link.is_wifi(), self.links)
 
-        for name, link in wifi.items():
+        for link in wifi.values():
             if not link.up():
                 link.down()
 

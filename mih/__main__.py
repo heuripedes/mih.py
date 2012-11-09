@@ -29,7 +29,7 @@ def client_local_link_handler(mihf, link, state, scope):
                 logging.info('Switched to %s.', better.ifname)
 
         # Find an alternative technology link related to server's link report
-        elif mih.last_report:
+        elif mihf.last_report:
             up_links = [l for l in mihf.last_report if l.is_ready()]
 
             better = sorted(up_links, util.link_compare)

@@ -3,7 +3,6 @@
 import os
 import collections
 import errno
-import shlex
 import subprocess as subproc
 import re
 import time
@@ -69,22 +68,23 @@ def make_link(**kwargs):
 class Link(object):
 
     def __init__(self, **kwargs):
-        
-        # Callbacks
-        self.on_link_event = None
 
-        self.remote = False
-
-        self.state = None # force link_up on first poll()
+        self.ifname = None
         self.ipaddr = ''
+        self.macaddr = ''
+        self.state  = None # force link_up on first poll()
+        self.remote = False
+        self.ready = False
         self.discoverable = True
         self.technology = 'unknown'
+
+        self.on_link_event = lambda _,_: None # callbacks
 
         self.update(**kwargs)
         #self.poll()
 
 
-    def is_wired(self):
+    def is_wifi(self):
         return self.technology == 'wifi'
 
 
@@ -97,7 +97,7 @@ class Link(object):
 
     
     def __repr__(self):
-        return '%s(name=%s, ipv4=%s)' %\
+        return '%s(name=%s, ipv4=%s)' % \
                 (self.__class__.__name__, self.ifname, self.__dict__.get('ipaddr'))
 
 
@@ -158,7 +158,7 @@ class Link(object):
         if self.state:
             util.dhcp_release(self.ifname)
 
-            subproc.call(['ip','addr','flush','dev',self.ifname])
+            subproc.call(['ip', 'addr', 'flush', 'dev', self.ifname])
 
             sockios.set_down(self.ifname)
 
@@ -231,6 +231,9 @@ class Link80203(Link):
 class Link80211(Link):
     def __init__(self, **kwargs):
         self.technology = 'wifi'
+        self.strenght = 0
+        self.samples = None
+        self.essid = None
 
         super(Link80211, self).__init__(**kwargs)
 
@@ -256,7 +259,7 @@ class Link80211(Link):
 
                 matches = util.match_output('ESSID:"([^"$]+)', 'iwconfig '+ self.ifname)
                 self.essid = matches[0].strip()
-            except e:
+            except Exception, e:
                 logging.warning('Failed to query signal strenght: %s', e)
 
         else:
@@ -321,8 +324,10 @@ class LinkMobile(Link):
     def __init__(self, **kwargs):
 
         self.discoverable = False
-
         self.technology = 'mobile'
+        self.strenght = 0
+        self.samples = None
+        self._pppd = None
 
         if not kwargs.get('remote'):
 
