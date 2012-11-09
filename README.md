@@ -37,6 +37,7 @@ Dependencies
 - python-dbus
 - dbus-glib
 - ModemManager 0.6 (http://download.gnome.org/sources/ModemManager/0.6/ModemManager-0.6.0.0.tar.xz)
+- python-sockios (https://github.com/heuripedes/python-sockios)
 
 on **Arch Linux**, run:
 
