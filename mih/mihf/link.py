@@ -314,7 +314,7 @@ class Link80211(Link):
         return success
 
     def is_going_down(self):
-        return (self.is_wifi() and len(self.samples) == WIFI_SAMPLES and
+        return (len(self.samples) == WIFI_SAMPLES and
                 util.average(self.samples) < WIFI_THRESHOLD)
 
 
