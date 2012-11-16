@@ -136,6 +136,8 @@ class LocalMihf(BasicMihf):
 
         while self._oqueue:
             link, msg = self._oqueue.pop()
+
+            logging.debug("Sending %s to %s", msg.kind, msg.daddr);
             
             if link:
                 util.bind_sock_to_device(self._sock, link)
@@ -260,28 +262,16 @@ class LocalMihf(BasicMihf):
 
 class RemoteMihf(BasicMihf):
    
-    def __init__(self, name, addr, links=dict()):
+    def __init__(self, name, addr):
         super(RemoteMihf, self).__init__()
         
-        self._addr = addr
-        self._name  = name
-        self._links = links
-
-    @property
-    def addr(self):
-        return self._addr
-
-    @property
-    def links(self):
-        return self._links.values()
-
-    @links.setter
-    def links(self, links):
-        self._links = links
+        self.addr = addr
+        self.name  = name
+        self.links = dict()
 
     def import_links(self, links):
         for link in links:
-            self._links[link['ifname']] = Link(**link)
+            self.links[link['ifname']] = Link(**link)
 
 
 class ClientMihf(LocalMihf):
@@ -349,7 +339,7 @@ class ClientMihf(LocalMihf):
 
             links = []
             for link in msg.payload:
-                links += [Link(link)]
+                links += [Link(**link)]
 
             self.last_report = links
 

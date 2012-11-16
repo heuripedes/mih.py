@@ -5,7 +5,11 @@ from mih.mihf import mihf
 from mih.mihf import util
 import logging
 
-def client_remote_link_handler(mihf, link, status, scope):
+def server_local_link_handler(mihf, link, state, scope):
+    logging.info('Link %s is %s', link, state)
+    pass
+
+def client_remote_link_handler(mihf, link, state, scope):
     pass
 
 def client_local_link_handler(mihf, link, state, scope):
@@ -84,13 +88,13 @@ def main():
     
     if args.server:
         f = mihf.ServerMihf({
-            'local': lambda a, b, c, d: None,
+            'local': server_local_link_handler,
             'remote': lambda a, b, c, d: None,
             })
     else:
         f = mihf.ClientMihf({
             'local': client_local_link_handler,
-            'remote': client_remote_link_handler
+            'remote': lambda a, b, c, d: None,
             })
 
     f.run()
