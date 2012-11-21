@@ -23,6 +23,7 @@ def gen_id(prefix=''):
 
 
 def average(samples):
+    """Calculates the average of the non-zero entries in `samples`."""
     count = len(samples)
     total = 0
     for sample in samples:
@@ -35,45 +36,45 @@ def average(samples):
 
 
 def unpickle(pickled):
+    """Deserializes `pickled`."""
     return cPickle.loads(pickled)
 
 
 def pickle(obj):
+    """Serializes and optimizes `obj`."""
     return pickletools.optimize(cPickle.dumps(obj))
 
 
-def normalize(s):
-    return s.ljust(resource.getpagesize(), '\x00')
-
-
 def dhcp_release(ifname):
+    """Obtain a DHCP lease for `ifname`."""
     retcode = False
     try:
         subprocess.call(['dhcpcd', '--release', ifname])
-    except OSError as e:
+    except OSError, e:
         if not e.errno == errno.ENOENT:
             raise e
 
         try:
             subprocess.call(['dhclient', '-r', ifname])
-        except OSError as e:
+        except OSError, e:
             if not e.errno == errno.ENOENT:
                 raise e
 
             print '- DHCP client program not found. Please install dhcpcd or dhclient.'
 
 def dhcp_renew(ifname):
+    """Renews `ifname`'s DHCP lease."""
     retcode = False
 
     try:
         retcode = subprocess.call(['dhcpcd', '--rebind', ifname])
-    except OSError as e:
+    except OSError, e:
         if not e.errno == errno.ENOENT:
             raise e
 
         try:
             retcode = subprocess.call(['dhclient', ifname])
-        except OSError as e:
+        except OSError, e:
             if not e.errno == errno.ENOENT:
                 raise e
 
@@ -83,17 +84,20 @@ def dhcp_renew(ifname):
     return retcode == 0
 
 def bind_sock_to_device(sock, dev = ''):
+    """Binds `sock` to `dev`."""
     # TODO: use IP_PKTINFO
     # TODO: move to sockios
     sock.setsockopt(socket.SOL_SOCKET, SO_BINDTODEVICE, dev)
 
 def match_output(pattern, cmd):
+    """Matches `pattern` against the output of the call to `cmd`."""
     if isinstance(cmd, str):
         cmd = shlex.split(cmd)
 
     return re.findall(pattern, subprocess.check_output(cmd))
 
 def set_blocking(fd, blocking):
+    """Enables/disables the blocking I/O on `fd`."""
     import fcntl
 
     flags = fcntl.fcntl(fd, fcntl.F_GETFL)

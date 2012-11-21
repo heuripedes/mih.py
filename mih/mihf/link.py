@@ -66,6 +66,7 @@ def make_link(**kwargs):
 
 
 class Link(object):
+    """Base class for links."""
 
     def __init__(self, **kwargs):
 
@@ -85,14 +86,17 @@ class Link(object):
 
 
     def is_wifi(self):
+        """Is this link a WiFi link?"""
         return self.technology == 'wifi'
 
 
     def is_mobile(self):
+        """Is this link a mobile link?"""
         return self.technology == 'mobile'
 
 
     def is_wired(self):
+        """Is this link a wired link?"""
         return self.technology == 'wired'
 
     
@@ -102,6 +106,7 @@ class Link(object):
 
 
     def update(self, **kwargs):
+        """Updates the link object state."""
         vars(self).update(kwargs)
         
         if self.remote and hasattr(self, 'ready'):
@@ -112,12 +117,14 @@ class Link(object):
    
 
     def _poll_ifconf(self):
+        """Refreshes the link's IPv4 and MAC addresses."""
         ifconf = sockios.get_ifconf(self.ifname)
         self.macaddr = ifconf['hw_addr']
         self.ipaddr  = ifconf['in_addr']
 
 
     def poll(self):
+        """Refreshes the link object's state."""
         assert not self.remote
 
         self._poll_ifconf()
@@ -125,6 +132,7 @@ class Link(object):
 
 
     def poll_and_notify(self):
+        """Refreshes the internal state and notifies users of link events."""
         assert not self.remote
 
         before = self.is_ready()
@@ -142,6 +150,7 @@ class Link(object):
    
 
     def up(self):
+        """Set's the link's interface up."""
         assert not self.remote
 
         if not self.state:
@@ -153,6 +162,7 @@ class Link(object):
 
     
     def down(self):
+        """Set's the link's interface down."""
         assert not self.remote
 
         if self.state:
@@ -171,11 +181,13 @@ class Link(object):
 
 
     def is_ready(self):
+        """Checks whether the link is ready."""
         return (getattr(self, '_ready', False) or
                 (self.state and len(self.ipaddr)))
 
 
     def as_dict(self):
+        """Returns the link's internal state as a dict()."""
         d = self.__dict__.copy()
 
         if self.remote and hasattr(d, '_ready'):
@@ -452,11 +464,11 @@ class LinkMobile(Link):
                 continue
 
             if not self.ifname:
-                matches = re.findall('Using\s+interface\s+([a-z0-9]+)', line)
+                matches = re.findall(r'Using\s+interface\s+([a-z0-9]+)', line)
                 if matches:
                     self.ifname = matches[0]
             elif not self.ipaddr:
-                matches = re.findall('local\s+IP\s+address\s+([0-9.]+)', line)
+                matches = re.findall(r'local\s+IP\s+address\s+([0-9.]+)', line)
                 if matches:
                     self.ipaddr = matches[0]
             #print 'attempt:', 200 - attempts,'line:',line

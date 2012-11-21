@@ -39,6 +39,7 @@ class ModemManagerWrapper(object):
 
 
     def EnumerateDevices(self):
+        """Get the list of modem devices."""
         return self.iface.EnumerateDevices()
 
 
@@ -79,18 +80,23 @@ class Modem(object):
             return status['state']
 
     def GetStatus(self):
+        """Get the modem status."""
         return self._simple.GetStatus()
 
     def Enable(self, enable):
+        """Enable the device. Initializes the modem."""
         self._modem.Enable(enable)
 
     def Connect(self, options, timeout):
+        """Dial in."""
         self._simple.Connect(options, timeout)
 
     def Disconnect(self):
+        """Disconnect modem."""
         self._modem.Disconnect()
 
     def GetInfo(self):
+        """Get the card information (manufacturer, modem, version). """
         return self._modem.GetInfo()
 
     def Reset(self):
