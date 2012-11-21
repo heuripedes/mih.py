@@ -68,6 +68,16 @@ class Modem(object):
         else:
             return self._props.Get(MM_DBUS_INTERFACE_MODEM, name)
 
+    @property
+    def State(self):
+        """Wrapper for org.freedesktop.ModemManager.Modem.State property."""
+
+        try:
+            return self._props.Get(MM_DBUS_INTERFACE_MODEM, 'State')
+        except dbus.DBusException, e:
+            status = self.GetStatus()
+            return status['state']
+
     def GetStatus(self):
         return self._simple.GetStatus()
 

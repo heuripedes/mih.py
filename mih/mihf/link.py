@@ -365,12 +365,13 @@ class LinkMobile(Link):
     def poll(self):
         if self.remote:
             return
-        
+
+        status = self._modem.GetStatus()
+
         self.state = (self._modem.State == mm.MM_MODEM_STATE_CONNECTED)
+
         if not self.state:
             return
-        
-        status = self._modem.GetStatus()
 
         if not self.is_ready():
             self.strenght = 0
@@ -388,18 +389,18 @@ class LinkMobile(Link):
   
     def _enable(self, enable):
         if enable:
-            print 'Enabling modem...'
+            logging.debug('Enabling modem...')
         else:
-            print 'Disabling modem...'
+            logging.debug('Disabling modem...')
 
         try:
             self._modem.Enable(enable)
             return True
         except dbus.DBusException, e:
             if enable:
-                print 'Failed to enable the modem: %s' % e
+                logging.debug('Failed to enable the modem: %s', str(e))
             else:
-                print 'Failed to disable the modem: %s' % e
+                logging.debug('Failed to disable the modem: %s', str(e))
 
             return False
     
@@ -422,11 +423,12 @@ class LinkMobile(Link):
 
         try:
             # XXX: pppd output must be unbufered or read()/write() will block.
-            # in case pppd stdout is buffered, use UNIX sockets using socket.socketpair()
+            # in case pppd stdout is buffered, use UNIX sockets using
+            # socket.socketpair()
             self._pppd = subproc.Popen(args, cwd='/', env={},
                     stdout=subproc.PIPE, stderr=subproc.PIPE)
         except IOError, e:
-            print 'Failed to run pppd: %s' % e
+            logging.debug('Failed to run pppd: %s', str(e))
             return False
      
         # non-blocking stdout
@@ -468,7 +470,7 @@ class LinkMobile(Link):
     def _connect(self):
         """Register the device with a network provider."""
 
-        print 'Connecting modem...'
+        logging.debug('Connecting modem...')
 
         opts = {
                 'number':   MOBILE_GSM_NUMBER,
@@ -477,7 +479,7 @@ class LinkMobile(Link):
                 'password': MOBILE_GSM_PASS
                 }
 
-        self._modem.Connecting(opts, timeout=120)
+        self._modem.Connect(opts, timeout=120)
 
         # Wait up to 3 secs until connected.
         for attempt in range(0, 30):
@@ -491,13 +493,13 @@ class LinkMobile(Link):
     def _disconnect(self):
         """Disconnect packet data connections."""
         
-        print 'Disconnecting modem...'
+        logging.debug('Disconnecting modem...')
         
         if self._modem.State > mm.MM_MODEM_STATE_REGISTERED: # registered/connected
             try:
                 self._modem.Disconnect()
             except dbus.DBusException, e:
-                print 'Failed to disconnect the modem: %s' % e
+                logging.warning('Failed to disconnect the modem %s', str(e))
                 return False
             
             # Wait up to 3 secs until disconnected.
