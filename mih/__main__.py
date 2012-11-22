@@ -32,7 +32,7 @@ class MihServer:
 class MihClient:
     @staticmethod
     def link_up(mihf, link, state, scope):
-        if link.remote or mihf.current_link == link:
+        if link.remote:
             return
 
         if not mihf.current_link:
@@ -56,36 +56,33 @@ class MihClient:
         if current != link:
             return
 
-        # try to set one link up when there's none available.
-        if not up_links:
-            logging.debug('No up link.')
-            for lnk in links:
-                if mihf.switch(lnk):
-                    logging.info('Switched to %s.', lnk.ifname)
-                    mihf.discover(link)
-                    return
-
-        # switch to an up link if we can
-        if up_links:
-            better = sorted(up_links, util.link_compare)[0]
-
-            if mihf.switch(better):
-                logging.info('Switched to %s.', better.ifname)
-                mihf.discover(link)
-
         # find an alternative tech link related to server's link report
-        elif mihf.last_report:
+        if mihf.last_report:
             alinks = find_alt_link(current, links, mihf.last_report)
             for alink in sorted(alinks, util.link_compare):
                 if mihf.switch(alink):
                     logging.info('Switched to %s.', alink.ifname)
-                    mihf.discover(link)
+                    mihf.discover(alink)
                     break
 
             mihf.last_report = None
 
+        # switch to an up link if we can
+        elif up_links:
+            better = sorted(up_links, util.link_compare)[0]
+
+            if mihf.switch(better):
+                logging.info('Switched to %s.', better.ifname)
+                mihf.discover(better)
+
         else:
-            logging.warning('No suitable link to fallback.')
+            logging.debug('Attempting to bring one link up...')
+            # try to set one link up when there's none available
+            for lnk in links:
+                if lnk != link and mihf.switch(lnk):
+                    logging.info('Switched to %s.', lnk.ifname)
+                    mihf.discover(lnk)
+                    break
 
     @staticmethod
     def link_going_down(mihf, link, state, scope):
