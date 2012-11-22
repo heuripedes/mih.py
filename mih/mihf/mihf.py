@@ -72,15 +72,15 @@ class LocalMihf(BasicMihf):
         if not isinstance(link, str):
             link = link.ifname
 
-        util.bind_sock_to_device(self._sock, link)
+        #util.bind_sock_to_device(self._sock, link)
 
-        self._send(None, 'mih_discovery.request', daddr=('<broadcast>', self.PORT))
+        self._send(None, 'mih_discovery.request', daddr=('<broadcast>', self.PORT), link=link)
 
-        util.bind_sock_to_device(self._sock, '')
+        #util.bind_sock_to_device(self._sock, '')
 
     def switch(self, link):
 
-        logging.debug('Switch from %s to %s', self.current_link, link)
+        logging.debug('Switching from %s to %s...', self.current_link, link)
 
         if not link.up():
             link.down()
@@ -138,10 +138,10 @@ class LocalMihf(BasicMihf):
         while self._oqueue:
             link, msg = self._oqueue.pop()
 
-            logging.debug("Sending %s to %s", msg.kind, msg.daddr)
-
             if link:
                 util.bind_sock_to_device(self._sock, link)
+
+            logging.debug("Sending %s to %s", msg.kind, msg.daddr)
 
             sent = 0
             attempts = 4
