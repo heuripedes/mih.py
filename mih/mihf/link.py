@@ -73,7 +73,6 @@ class Link(object):
 
         self.ifname = None
         self.ipaddr = ''
-        self.macaddr = ''
         self.state = None  # force link_up on first poll()
         self.remote = False
         self.ready = False
@@ -113,16 +112,23 @@ class Link(object):
 
     def _poll_ifconf(self):
         """Refreshes the link's IPv4 and MAC addresses."""
-        ifconf = sockios.get_ifconf(self.ifname)
-        self.macaddr = ifconf['hw_addr']
-        self.ipaddr = ifconf['in_addr']
+        ifconf = None
+        try:
+            ifconf = sockios.get_ifconf(self.ifname)
+            self.ipaddr = ifconf['in_addr']
+        except sockios.error:
+            self.ipaddr = ''
 
     def poll(self):
         """Refreshes the link object's state."""
         assert not self.remote
 
-        self._poll_ifconf()
         self.state = sockios.is_up(self.ifname)
+
+        if self.state:
+            self._poll_ifconf()
+        else:
+            self.ipaddr = ''
 
     def poll_and_notify(self):
         """Refreshes the internal state and notifies users of link events."""
