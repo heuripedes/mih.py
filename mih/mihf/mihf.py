@@ -61,6 +61,9 @@ class LocalMihf(BasicMihf):
         self._oqueue = collections.deque()
         self._iqueue = collections.deque()
 
+        # event queue
+        self._equeue = collections.deque()
+
     def discover(self, link):
 
         if not link.discoverable:
@@ -77,7 +80,7 @@ class LocalMihf(BasicMihf):
 
     def switch(self, link):
 
-        logging.debug('Switching from %s to %s', self.current_link, link)
+        logging.debug('Switch from %s to %s', self.current_link, link)
 
         if not link.up():
             link.down()
@@ -181,11 +184,8 @@ class LocalMihf(BasicMihf):
     def _handle_message(self, srcaddr, msg):
         pass
 
-    def _handle_link_event(self, link, state):
-        self._notify_user(link, state)
-
-    def _notify_user(self, link, state, scope='local'):
-        self._handler[scope](self, link, state, scope)
+    def _handle_link_event(self, link, state, scope='local'):
+        self._equeue.append((link, state, scope))
 
     def _export_links(self):
         """Returns a list of link data suitable for remote use."""
@@ -255,6 +255,20 @@ class LocalMihf(BasicMihf):
         for addr, msg in self._receive():
             self._handle_message(addr, msg)
 
+    def _process_events(self):
+        while self._equeue:
+            link, state, scope = self._equeue.pop()
+
+            logging.info('Link %s is %s', link, state)
+
+            if self._handler:
+                fname = 'link_' + state.replace(' ', '_')
+
+                if hasattr(self._handler, fname):
+                    getattr(self._handler, fname)(self, link, state, scope)
+
+        #self._handler[scope](self, link, state, scope)
+
 
 class RemoteMihf(BasicMihf):
 
@@ -286,6 +300,7 @@ class ClientMihf(LocalMihf):
         while True:
             self._fill_buffer()
             self._proccess_messages()
+            self._process_events()
 
             ready = self._refresh_links()
 
@@ -359,6 +374,7 @@ class ServerMihf(LocalMihf):
         while True:
             self._fill_buffer()
             self._proccess_messages()
+            self._process_events()
 
             ready = self._refresh_links()
 

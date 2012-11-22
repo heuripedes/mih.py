@@ -5,65 +5,118 @@ from mih.mihf import mihf
 from mih.mihf import util
 import logging
 
-def server_local_link_handler(mihf, link, state, scope):
-    logging.info('Link %s is %s', link, state)
+
+def find_alt_link(current, llinks, rlinks):
+    for rlink in rlinks:
+        # discard same-technology links
+        if rlink.technology == current.technology:
+            continue
+
+        # discard down remote links
+        if not rlink.is_ready():
+            continue
+
+        for llink in llinks:
+            # discard this link
+            if current == llink:
+                continue
+
+            if llink.technology == rlink.technology:
+                yield llink
+
+
+class MihServer:
     pass
 
-def client_remote_link_handler(mihf, link, state, scope):
-    pass
 
-def client_local_link_handler(mihf, link, state, scope):
-    current = mihf.current_link
+class MihClient:
+    @staticmethod
+    def link_up(mihf, link, state, scope):
+        if link.remote or mihf.current_link == link:
+            return
 
-    logging.info('Link %s is %s', link, state)
-    
-    if current == link and state == 'going down':
-        mihf.report()
+        if not mihf.current_link:
+            if mihf.switch(link):
+                logging.info('Switched to %s.', link.ifname)
+            else:
+                logging.info('Failed to switch to to %s.', link.ifname)
 
-    # Try to switch if the current link is down.
-    elif current == link and state == 'down':
+        mihf.discover(link)
 
-        # Switch to an up link if we can
-        up_links = [l for l in mihf.links.values() if l.is_ready()]
+    @staticmethod
+    def link_down(mihf, link, state, scope):
+        if link.remote:
+            return
 
+        links = mihf.links.values()
+        current = mihf.current_link
+        up_links = [l for l in links if l.is_ready()]
+
+        # nothing else to do.
+        if current != link:
+            return
+
+        # try to set one link up when there's none available.
+        if not up_links:
+            logging.debug('No up link.')
+            for lnk in links:
+                if mihf.switch(lnk):
+                    logging.info('Switched to %s.', lnk.ifname)
+                    mihf.discover(link)
+                    return
+
+        # switch to an up link if we can
         if up_links:
             better = sorted(up_links, util.link_compare)[0]
 
             if mihf.switch(better):
                 logging.info('Switched to %s.', better.ifname)
+                mihf.discover(link)
 
-        # Find an alternative technology link related to server's link report
+        # find an alternative tech link related to server's link report
         elif mihf.last_report:
-            up_links = [l for l in mihf.last_report if l.is_ready()]
+            alinks = find_alt_link(current, links, mihf.last_report)
+            for alink in sorted(alinks, util.link_compare):
+                if mihf.switch(alink):
+                    logging.info('Switched to %s.', alink.ifname)
+                    mihf.discover(link)
+                    break
 
-            better = sorted(up_links, util.link_compare)
-
-            for rlink in better:
-                if (rlink.tech == current.tech) or (not rlink.is_ready()):
-                    continue
-
-                for link in mihf.links:
-                    if (link.tech == rlink.tech) and (mihf.switch(link)):
-                        logging.info('Switched to %s.', link.ifname)
-                        break
+            mihf.last_report = None
 
         else:
             logging.warning('No suitable link to fallback.')
-        
-        
-    # Try to use the newly available link as main if we're not connected at 
-    # the moment. Send discovery message if the switching succeed.
-    elif not current and state == 'up':
-        if mihf.switch(link):
-            logging.info('Switched to %s.', link.ifname)
-            mihf.discover(link)
+
+    @staticmethod
+    def link_going_down(mihf, link, state, scope):
+        if link.remote:
+            return
+
+        links = mihf.links.values()
+        current = mihf.current_link
+
+        if current != link:
+            return
+
+        if mihf.last_report:
+            alinks = find_alt_link(current, links, mihf.last_report)
+            for alink in sorted(alinks, util.link_compare):
+                if mihf.switch(alink):
+                    logging.info('Switched to %s.', alink.ifname)
+                    mihf.discover(link)
+                    break
+
+            mihf.last_report = None
         else:
-            logging.info('Failed to switch to to %s.', link.ifname)
-        
+            mihf.report()
+
 
 def main():
     import sys
     import argparse
+    import os
+
+    os.chdir('/')
 
     argv = sys.argv[1:]
 
@@ -85,26 +138,15 @@ def main():
     )
 
     f = None
-    
+
     if args.server:
-        f = mihf.ServerMihf({
-            'local': server_local_link_handler,
-            'remote': lambda a, b, c, d: None,
-            })
+        f = mihf.ServerMihf(MihServer)
     else:
-        f = mihf.ClientMihf({
-            'local': client_local_link_handler,
-            'remote': lambda a, b, c, d: None,
-            })
+        f = mihf.ClientMihf(MihClient)
 
     f.run()
-
 
     sys.exit(0)
 
 if __name__ == '__main__':
     main()
-    
-
-    
-
