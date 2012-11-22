@@ -157,16 +157,20 @@ class Link(object):
         assert not self.remote
 
         if self.state:
-            util.dhcp_release(self.ifname)
+            if self.is_ready():
+                util.dhcp_release(self.ifname)
 
-            subproc.call(['ip', 'addr', 'flush', 'dev', self.ifname])
+                subproc.call(['ip', 'addr', 'flush', 'dev', self.ifname])
 
-            sockios.set_down(self.ifname)
+                sockios.set_down(self.ifname)
 
-            self.poll()
+                self.poll()
 
-            if not self.state and self.on_link_event:
-                self.on_link_event(self, 'down')
+                if not self.state and self.on_link_event:
+                    self.on_link_event(self, 'down')
+            else:
+                sockios.set_down(self.ifname)
+                self.poll()
 
         return not self.state
 

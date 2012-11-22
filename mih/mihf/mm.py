@@ -4,7 +4,7 @@
 
 import dbus
 
-MM_DBUS_PATH    = '/org/freedesktop/ModemManager'
+MM_DBUS_PATH = '/org/freedesktop/ModemManager'
 MM_DBUS_SERVICE = 'org.freedesktop.ModemManager'
 
 MM_DBUS_INTERFACE = 'org.freedesktop.ModemManager'
@@ -29,6 +29,7 @@ MM_MODEM_STATE_DISCONNECTING = 70
 MM_MODEM_STATE_CONNECTING = 80
 MM_MODEM_STATE_CONNECTED = 90
 
+
 class ModemManagerWrapper(object):
 
     def __init__(self):
@@ -36,7 +37,6 @@ class ModemManagerWrapper(object):
 
         self.proxy = self.bus.get_object(MM_DBUS_SERVICE, MM_DBUS_PATH)
         self.iface = dbus.Interface(self.proxy, dbus_interface=MM_DBUS_INTERFACE)
-
 
     def EnumerateDevices(self):
         """Get the list of modem devices."""
@@ -72,7 +72,7 @@ class Modem(object):
 
         try:
             return self._props.Get(MM_DBUS_INTERFACE_MODEM, 'State')
-        except dbus.DBusException, e:
+        except dbus.DBusException:
             status = self.GetStatus()
             return status['state']
 
