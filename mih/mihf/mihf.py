@@ -20,7 +20,7 @@ class BasicMihf(object):
 
     # MIH Commands
     def discover(self, link):
-        """Broadcasts a server discovery request throught *link*. *link*
+        """Broadcasts a server discovery request through *link*. *link*
         can either be a Link instance or a string containing the interface
         name."""
         raise NotImplementedError
@@ -72,11 +72,7 @@ class LocalMihf(BasicMihf):
         if not isinstance(link, str):
             link = link.ifname
 
-        #util.bind_sock_to_device(self._sock, link)
-
         self._send(None, 'mih_discovery.request', daddr=('<broadcast>', self.PORT), link=link)
-
-        #util.bind_sock_to_device(self._sock, '')
 
     def switch(self, link):
 
@@ -201,7 +197,7 @@ class LocalMihf(BasicMihf):
         return exported
 
     def _scan_links(self):
-        """Checks for newly added interfaces and removes unexistent ones."""
+        """Checks for newly added interfaces and removes nonexistent ones."""
 
         llnames = get_local_ifnames()
         new = list(set(llnames) - set(self.links.keys()))
@@ -300,7 +296,6 @@ class ClientMihf(LocalMihf):
         while True:
             self._fill_buffer()
             self._proccess_messages()
-            self._process_events()
 
             ready = self._refresh_links()
 
@@ -308,6 +303,8 @@ class ClientMihf(LocalMihf):
                 for link in self.links.values():
                     if self.switch(link):
                         break
+
+            self._process_events()
 
             self._flush_buffer()
 
@@ -374,13 +371,14 @@ class ServerMihf(LocalMihf):
         while True:
             self._fill_buffer()
             self._proccess_messages()
-            self._process_events()
 
             ready = self._refresh_links()
 
             if len(ready) != len(self.links):
                 for link in (set(self.links.values()) ^ set(ready)):
                     link.up()
+
+            self._process_events()
 
             self._flush_buffer()
 

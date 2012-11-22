@@ -100,7 +100,7 @@ def match_output(pattern, cmd):
 
 
 def set_blocking(fd, blocking):
-    """Enables/disables the blocking I/O on `fd`."""
+    """Enables or disables the blocking I/O on `fd`."""
     import fcntl
 
     flags = fcntl.fcntl(fd, fcntl.F_GETFL)
@@ -116,7 +116,7 @@ def link_value(link):
 
         v(l) = link value
         w(l) = link weight (technology value/index)
-        s(l) = link signal strenght"""
+        s(l) = link signal strength"""
 
     weight = {
             'mobile': 1,
@@ -142,7 +142,7 @@ def link_compare(a, b):
     if a.is_wifi() and b.is_mobile():
         return 1
 
-    # if its the same tech, signal strenght decides who's better
+    # if its the same tech, signal strength decides who's better
     if type(a) == type(b):
         delta = a.strenght - b.strenght
         return delta / abs(delta) if delta != 0 else 0
