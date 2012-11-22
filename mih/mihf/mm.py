@@ -14,9 +14,9 @@ MM_DBUS_INTERFACE_MODEM_GSM_CARD = 'org.freedesktop.ModemManager.Modem.Gsm.Card'
 MM_DBUS_INTERFACE_MODEM_GSM_NETWORK = 'org.freedesktop.ModemManager.Modem.Gsm.Network'
 MM_DBUS_INTERFACE_MODEM_SIMPLE = 'org.freedesktop.ModemManager.Modem.Simple'
 
-MM_MODEM_TYPE_UNKNOWN = 0,
-MM_MODEM_TYPE_GSM = 1,
-MM_MODEM_TYPE_CDMA = 2,
+MM_MODEM_TYPE_UNKNOWN = 0
+MM_MODEM_TYPE_GSM = 1
+MM_MODEM_TYPE_CDMA = 2
 
 MM_MODEM_STATE_UNKNOWN = 0
 MM_MODEM_STATE_DISABLED = 10
@@ -64,10 +64,7 @@ class Modem(object):
         self._simple = dbus.Interface(self._proxy, dbus_interface=MM_DBUS_INTERFACE_MODEM_SIMPLE)
 
     def __getattr__(self, name):
-        if hasattr(self, name):
-            return getattr(self, name)
-        else:
-            return self._props.Get(MM_DBUS_INTERFACE_MODEM, name)
+        return self._props.Get(MM_DBUS_INTERFACE_MODEM, name)
 
     @property
     def State(self):

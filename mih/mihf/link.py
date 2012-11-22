@@ -22,7 +22,7 @@ WIRED_UP_STRENGHT   = 1000
 WIRED_DOWN_STRENGHT = 0
 
 # Wifi
-WIFI_ESSID = 'GREDES_TELEMATICA'
+WIFI_ESSID = 'GREDES_MIH'
 WIFI_KEY   = ''
 WIFI_THRESHOLD = 37
 WIFI_SAMPLES   = 10
@@ -39,7 +39,7 @@ def get_local_ifnames():
     """
 
     # Local common interfaces pci/amr/virtual/etc
-    prefixes = ('lo', 'virbr', 'vboxnet', 'ppp0')
+    prefixes = ('lo', 'virbr', 'vboxnet', 'ppp0', 'mon.')
     ifnames  = [name for name in sockios.get_iflist() if not name.startswith(prefixes)]
     ifnames += mm.ModemManager.EnumerateDevices()
 

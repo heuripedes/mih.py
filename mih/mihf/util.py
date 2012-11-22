@@ -130,11 +130,11 @@ def link_compare(a, b):
     link is considered worse, similar or better than *b*."""
     
     # wired > anything
-    if not a.wifi and not a.mobile and (b.wifi or b.mobile):
+    if not a.is_wifi() and not a.is_mobile() and (b.is_wifi() or b.is_mobile()):
         return 1
 
     # wifi > mobile
-    if a.wifi and b.mobile:
+    if a.is_wifi() and b.is_mobile():
         return 1
 
     # if its the same tech, signal strenght decides who's better
