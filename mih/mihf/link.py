@@ -60,10 +60,14 @@ def make_link(**kwargs):
     ifname = kwargs.get('ifname')
     if ifname.startswith('/'):
         return LinkMobile(**kwargs)
-    elif os.path.isdir('/sys/class/net/' + ifname + '/wireless'):
+
+    output = subproc.check_output(['iwconfig', ifname],
+        stderr=open('/dev/null'))
+
+    if re.findall('IEEE 802.11', output):
         return Link80211(**kwargs)
-    else:
-        return Link80203(**kwargs)
+
+    return Link80203(**kwargs)
 
 
 class Link(object):
