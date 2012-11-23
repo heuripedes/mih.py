@@ -31,7 +31,7 @@ class MihServer:
 
 class MihClient:
     @staticmethod
-    def link_up(mihf, link, state, scope):
+    def link_up(mihf, link):
         if link.remote:
             return
 
@@ -44,7 +44,7 @@ class MihClient:
         mihf.discover(link)
 
     @staticmethod
-    def link_down(mihf, link, state, scope):
+    def link_down(mihf, link):
         if link.remote:
             return
 
@@ -85,7 +85,7 @@ class MihClient:
                     break
 
     @staticmethod
-    def link_going_down(mihf, link, state, scope):
+    def link_going_down(mihf, link):
         if link.remote:
             return
 

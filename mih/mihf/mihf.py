@@ -180,8 +180,8 @@ class LocalMihf(BasicMihf):
     def _handle_message(self, srcaddr, msg):
         pass
 
-    def _handle_link_event(self, link, state, scope='local'):
-        self._equeue.append((link, state, scope))
+    def _handle_link_event(self, link, state):
+        self._equeue.append((link, state))
 
     def _export_links(self):
         """Returns a list of link data suitable for remote use."""
@@ -253,7 +253,7 @@ class LocalMihf(BasicMihf):
 
     def _process_events(self):
         while self._equeue:
-            link, state, scope = self._equeue.pop()
+            link, state = self._equeue.pop()
 
             logging.info('Link %s is %s', link, state)
 
@@ -261,9 +261,7 @@ class LocalMihf(BasicMihf):
                 fname = 'link_' + state.replace(' ', '_')
 
                 if hasattr(self._handler, fname):
-                    getattr(self._handler, fname)(self, link, state, scope)
-
-        #self._handler[scope](self, link, state, scope)
+                    getattr(self._handler, fname)(self, link)
 
 
 class RemoteMihf(BasicMihf):
