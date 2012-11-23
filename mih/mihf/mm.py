@@ -3,6 +3,7 @@
 # ModemManager/DBus wrapper
 
 import dbus
+import logging
 
 MM_DBUS_PATH = '/org/freedesktop/ModemManager'
 MM_DBUS_SERVICE = 'org.freedesktop.ModemManager'
@@ -47,7 +48,7 @@ ModemManager = None
 try:
     ModemManager = ModemManagerWrapper()
 except dbus.DBusException, e:
-    print 'Failed to access ModemManager DBus service: ', e
+    logging.critical('Failed to access ModemManager DBus service: %s', str(e))
     raise e
 
 
@@ -98,4 +99,3 @@ class Modem(object):
 
     def Reset(self):
         return self._modem.Reset()
-    

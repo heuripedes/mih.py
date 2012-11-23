@@ -6,6 +6,7 @@ import subprocess
 import errno
 import shlex
 import re
+import logging
 
 import cPickle
 import pickletools
@@ -50,38 +51,31 @@ def dhcp_release(ifname):
     try:
         subprocess.call(['dhcpcd', '--release', ifname])
     except OSError, e:
-        if not e.errno == errno.ENOENT:
+        if e.errno != errno.ENOENT:
             raise e
 
         try:
             subprocess.call(['dhclient', '-r', ifname])
         except OSError, e:
-            if not e.errno == errno.ENOENT:
+            if e.errno != errno.ENOENT:
                 raise e
-
-            print '- DHCP client program not found. Please install dhcpcd or dhclient.'
+            logging.warning('Neither dhcpcd nor dhclient are installed.')
 
 
 def dhcp_renew(ifname):
     """Renews `ifname`'s DHCP lease."""
-    retcode = False
-
     try:
-        retcode = subprocess.call(['dhcpcd', '--rebind', ifname])
+        subprocess.call(['dhcpcd', '--rebind', ifname])
     except OSError, e:
-        if not e.errno == errno.ENOENT:
+        if e.errno != errno.ENOENT:
             raise e
 
         try:
-            retcode = subprocess.call(['dhclient', ifname])
+            subprocess.call(['dhclient', ifname])
         except OSError, e:
-            if not e.errno == errno.ENOENT:
+            if e.errno != errno.ENOENT:
                 raise e
-
-            print '- DHCP client program not found. Please install dhcpcd or dhclient.'
-            retcode = 1
-
-    return retcode == 0
+            logging.warning('Neither dhcpcd nor dhclient are installed.')
 
 
 def bind_sock_to_device(sock, dev=''):

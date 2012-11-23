@@ -79,7 +79,7 @@ class Link(object):
         self.discoverable = True
         self.technology = 'unknown'
 
-        self.on_link_event = None  # callbacks
+        self.on_link_event = lambda (a, b): None  # callbacks
 
         self.update(**kwargs)
         #self.poll()
@@ -141,11 +141,7 @@ class Link(object):
         is_ready = self.is_ready()
 
         if before != is_ready:
-            if is_ready and self.on_link_event:
-                self.on_link_event(self, 'up')
-
-            if not is_ready and self.on_link_event:
-                self.on_link_event(self, 'down')
+            self.on_link_event(self, 'up' if is_ready else 'down')
 
     def up(self):
         """Set's the link's interface up."""
@@ -172,7 +168,7 @@ class Link(object):
 
                 self.poll()
 
-                if not self.state and self.on_link_event:
+                if not self.state:
                     self.on_link_event(self, 'down')
             else:
                 sockios.set_down(self.ifname)
@@ -202,6 +198,7 @@ class Link80203(Link):
 
     def __init__(self, **kwargs):
         self.technology = 'wired'
+        self.strenght = 0
 
         super(Link80203, self).__init__(**kwargs)
 
@@ -226,14 +223,14 @@ class Link80203(Link):
             return False
 
         util.dhcp_release(self.ifname)
-        success = util.dhcp_renew(self.ifname)
+        util.dhcp_renew(self.ifname)
 
         self.poll()
 
-        if self.is_ready() and self.on_link_event:
+        if self.is_ready():
             self.on_link_event(self, 'up')
 
-        return success and self.is_ready()
+        return self.is_ready()
 
 
 class Link80211(Link):
@@ -288,16 +285,13 @@ class Link80211(Link):
             return
 
         if self.is_going_down():
-            if self.on_link_event:
-                self.on_link_event(self, 'going down')
+            self.on_link_event(self, 'going down')
 
     def up(self):
         assert not self.remote
 
         if self.is_ready():
             return True
-
-        print self.mode, self.is_ready()
 
         subproc.call(['rfkill', 'unblock', 'all'])
 
@@ -313,19 +307,18 @@ class Link80211(Link):
             cmd.append('key')
             cmd.append(key)
 
-        success = subproc.call(cmd) == 0
+        if subproc.call(cmd) != 0:
+            return False
 
         util.dhcp_release(self.ifname)
-        success = success and util.dhcp_renew(self.ifname)
+        util.dhcp_renew(self.ifname)
 
         self.poll()
 
-        success = success and self.is_ready()
-
-        if success and self.on_link_event:
+        if self.is_ready():
             self.on_link_event(self, 'up')
 
-        return success
+        return self.is_ready()
 
     def is_going_down(self):
         return (len(self.samples) == WIFI_SAMPLES and
@@ -348,7 +341,7 @@ class LinkMobile(Link):
             self._modem = mm.Modem(kwargs.get('ifname'))
 
             if self._modem.Type != mm.MM_MODEM_TYPE_GSM:
-                raise 'Unsupported modem type.'
+                raise Exception('Unsupported modem type.')
 
             self._dbus_name = kwargs.get('ifname')
 
@@ -488,8 +481,8 @@ class LinkMobile(Link):
 
         self._modem.Connect(opts, timeout=120)
 
-        # Wait up to 3 secs until connected.
-        for attempt in range(0, 30):
+        # Wait up to 3 secs until connected. (0.1s * 30 attempts = 3s)
+        for _ in range(0, 30):
             if self._modem.State == mm.MM_MODEM_STATE_CONNECTED:
                 return True
 
@@ -508,8 +501,8 @@ class LinkMobile(Link):
                 logging.warning('Failed to disconnect the modem %s', str(e))
                 return False
 
-            # Wait up to 3 secs until disconnected.
-            for attempt in range(0, 30):
+            # Wait up to 3 secs until disconnected. (0.1s * 30 attempts = 3s)
+            for _ in range(0, 30):
                 if self._modem.State < mm.MM_MODEM_STATE_DISCONNECTING:
                     return True
 

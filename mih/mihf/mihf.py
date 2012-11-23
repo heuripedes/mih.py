@@ -7,7 +7,11 @@ import logging
 import collections
 
 import mih.mihf.util as util
-from mih.mihf.link import *
+#from mih.mihf.link import *
+from mih.mihf.link import get_local_ifnames
+from mih.mihf.link import make_link
+from mih.mihf.link import Link
+
 from mih.mihf.message import Message
 
 

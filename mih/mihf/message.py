@@ -5,6 +5,7 @@ import mih.mihf.util as util
 # TODO: generate/store message ids for each request
 # TODO: store discovery responses
 
+
 class Message(object):
 
     def __init__(self, **kw):
@@ -37,5 +38,3 @@ class Message(object):
 
     def __setstate__(self, dic):
         self.__dict__.update(dic)
-
-
