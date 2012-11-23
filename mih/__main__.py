@@ -36,9 +36,7 @@ class MihClient:
             return
 
         if not mihf.current_link:
-            if mihf.switch(link):
-                logging.info('Switched to %s.', link.ifname)
-            else:
+            if not mihf.switch(link):
                 logging.info('Failed to switch to to %s.', link.ifname)
 
         mihf.discover(link)
@@ -61,7 +59,6 @@ class MihClient:
             alinks = find_alt_link(current, links, mihf.last_report)
             for alink in sorted(alinks, util.link_compare):
                 if mihf.switch(alink):
-                    logging.info('Switched to %s.', alink.ifname)
                     mihf.discover(alink)
                     break
 
@@ -72,7 +69,6 @@ class MihClient:
             better = sorted(up_links, util.link_compare)[0]
 
             if mihf.switch(better):
-                logging.info('Switched to %s.', better.ifname)
                 mihf.discover(better)
 
         else:
@@ -80,7 +76,6 @@ class MihClient:
             # try to set one link up when there's none available
             for lnk in links:
                 if lnk != link and mihf.switch(lnk):
-                    logging.info('Switched to %s.', lnk.ifname)
                     mihf.discover(lnk)
                     break
 
@@ -99,7 +94,6 @@ class MihClient:
             alinks = find_alt_link(current, links, mihf.last_report)
             for alink in sorted(alinks, util.link_compare):
                 if mihf.switch(alink):
-                    logging.info('Switched to %s.', alink.ifname)
                     mihf.discover(link)
                     break
 

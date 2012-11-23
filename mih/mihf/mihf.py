@@ -82,19 +82,34 @@ class LocalMihf(BasicMihf):
 
         logging.debug('Switching from %s to %s...', self.current_link, link)
 
-        if not link.up():
-            link.down()
-            return False
+        success = False
+        ho_begin = time.clock()  # handover begin
+        ho_from = self.current_link
+        ho_to = link
 
-        if self.current_link:
-            self.current_link.down()
+        if link.is_ready():
+            success = True
+        else:
+            if not link.up():
+                link.down()
+                success = False
 
-        if link.is_mobile():
-            self._next_peek = time.time() + self.PEEK_TIME
+        if success:
+            if self.current_link:
+                self.current_link.down()
 
-        self.current_link = link
+            self.current_link = link
 
-        return True
+            if link.is_mobile():
+                self._next_peek = time.time() + self.PEEK_TIME
+
+        ho_time = time.clock() - ho_begin
+        ho_status = 'successfully' if success else 'unsuccessfully'
+
+        logging.info('Handover from %s to %s finished %s in %.2fs',
+            ho_from, ho_to, ho_status, ho_time)
+
+        return success
 
     def _make_socket(self, bind=False, blocking=True, timeout=0.3):
 
