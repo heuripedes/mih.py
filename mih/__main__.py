@@ -74,7 +74,7 @@ class MihClient:
         else:
             logging.debug('Attempting to bring one link up...')
             # try to set one link up when there's none available
-            for lnk in links:
+            for lnk in sorted(links, util.link_compare):
                 if lnk != link and mihf.switch(lnk):
                     mihf.discover(lnk)
                     break
