@@ -34,6 +34,7 @@ Dependencies
 ===
 - Python 2.7
 - dbus
+- pppd
 - python-dbus
 - dbus-glib
 - ModemManager 0.6 (http://download.gnome.org/sources/ModemManager/0.6/ModemManager-0.6.0.0.tar.xz)
