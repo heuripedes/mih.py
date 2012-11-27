@@ -92,7 +92,8 @@ class LocalMihf(BasicMihf):
         else:
             if not link.up():
                 link.down()
-                success = False
+            else:
+                success = True
 
         if success:
             if self.current_link:
