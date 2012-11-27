@@ -61,11 +61,14 @@ def make_link(**kwargs):
     if ifname.startswith('/'):
         return LinkMobile(**kwargs)
 
-    output = subproc.check_output(['iwconfig', ifname],
-        stderr=open('/dev/null'))
+    try:
+        output = subproc.check_output(['iwconfig', ifname],
+            stderr=open('/dev/null'))
 
-    if re.findall('IEEE 802.11', output):
-        return Link80211(**kwargs)
+        if re.findall('IEEE 802.11', output):
+            return Link80211(**kwargs)
+    except subproc.CalledProcessError:
+        pass
 
     return Link80203(**kwargs)
 
@@ -119,13 +122,16 @@ class Link(object):
         ifconf = None
         try:
             ifconf = sockios.get_ifconf(self.ifname)
-            self.ipaddr = ifconf['in_addr']
+            self.ipaddr = ifconf['in_addr'] or ''
         except sockios.error:
             self.ipaddr = ''
 
     def poll(self):
         """Refreshes the link object's state."""
         assert not self.remote
+
+        if not self.ifname:
+            return
 
         self.state = sockios.is_up(self.ifname)
 
@@ -174,6 +180,8 @@ class Link(object):
 
                 if not self.state:
                     self.on_link_event(self, 'down')
+
+                self.ipaddr = ''
             else:
                 sockios.set_down(self.ifname)
                 self.poll()
@@ -354,12 +362,15 @@ class LinkMobile(Link):
 
             kwargs['ifname'] = None
 
+            if self._modem.State == mm.MM_MODEM_STATE_CONNECTED:
+                self._detect_iface()
+
         super(LinkMobile, self).__init__(**kwargs)
 
     def update(self, *args, **kwargs):
         super(LinkMobile, self).update(*args, **kwargs)
 
-        self.ipaddr = None
+        self.ipaddr = ''
         self.strenght = 0
         self.samples = collections.deque(maxlen=WIFI_SAMPLES)
 
@@ -374,24 +385,34 @@ class LinkMobile(Link):
         if self.remote:
             return
 
-        status = self._modem.GetStatus()
-
         self.state = (self._modem.State == mm.MM_MODEM_STATE_CONNECTED)
 
         if not self.state:
+            self.ifname = ''
             return
 
-        if not self.is_ready():
-            self.strenght = 0
-            self.samples.clear()
+        self.ifname = 'ppp10'
+       
+        status = None
+        try:
+            status = self._modem.GetStatus()
+        except dbus.DBusException:
+            pass
         else:
-            self.strenght = status['signal-quality']
-            self.samples.append(self.strenght)
+            if not self.is_ready():
+                self.strenght = 0
+                self.samples.clear()
+            else:
+                self.strenght = status['signal_quality']
+                self.samples.append(self.strenght)
 
-        super(LinkMobile, self).poll()
+            super(LinkMobile, self).poll()
 
     def poll_and_notify(self):
         super(LinkMobile, self).poll_and_notify()
+
+    def _detect_iface(self):
+        pass
 
     def _enable(self, enable):
         if enable:
@@ -415,6 +436,7 @@ class LinkMobile(Link):
                 '/usr/sbin/pppd',  # command
                 'nodetach', 'lock', 'nodefaultroute', 'noipdefault',
                 'noauth', 'crtscts', 'modem', 'usepeerdns',
+                'unit', '10',  # ppp10
                 #'debug',
                 '115200'  # baud
                 ]
@@ -483,7 +505,7 @@ class LinkMobile(Link):
                 'password': MOBILE_GSM_PASS
                 }
 
-        self._modem.Connect(opts, timeout=120)
+        self._modem.Connect(opts) # doesnt support timeout parameter
 
         # Wait up to 3 secs until connected. (0.1s * 30 attempts = 3s)
         for _ in range(0, 30):
@@ -551,8 +573,12 @@ class LinkMobile(Link):
         self._modem.Disconnect()
         self._modem.Enable(False)
 
+        try:
+            subproc.call(['killall', 'pppd'])
+        except Exception:
+            pass
+
         self.ifname = None
-        self.ipaddr = None
 
         return success
 

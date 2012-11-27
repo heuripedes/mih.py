@@ -85,9 +85,9 @@ class Modem(object):
         """Enable the device. Initializes the modem."""
         self._modem.Enable(enable)
 
-    def Connect(self, options, timeout):
+    def Connect(self, options):
         """Dial in."""
-        self._simple.Connect(options, timeout)
+        self._simple.Connect(options)
 
     def Disconnect(self):
         """Disconnect modem."""
