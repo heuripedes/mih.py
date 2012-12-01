@@ -7,6 +7,7 @@ import re
 import time
 import dbus
 import logging
+from threading import Thread
 
 import sockios
 sockios.init()
@@ -83,7 +84,7 @@ class Link(object):
         self.remote = False
         self.ready = False
         self.discoverable = True
-        self.technology = 'unknown'
+        self.technology = getattr(self, 'technology', 'unknown')
 
         self.on_link_event = lambda (a, b): None  # callbacks
 
@@ -143,11 +144,11 @@ class Link(object):
         """Refreshes the internal state and notifies users of link events."""
         assert not self.remote
 
-        before = self.is_ready()
+        before = self.state
 
         self.poll()
 
-        is_ready = self.is_ready()
+        is_ready = self.state
 
         if before != is_ready:
             self.on_link_event(self, 'up' if is_ready else 'down')
@@ -296,11 +297,8 @@ class Link80211(Link):
     def poll_and_notify(self):
         super(Link80211, self).poll_and_notify()
 
-        if not self.is_ready():
-            return
-
-        if self.is_going_down():
-            self.on_link_event(self, 'going down')
+        if self.state and self.is_going_down():
+                self.on_link_event(self, 'going down')
 
     def up(self):
         assert not self.remote
@@ -446,7 +444,7 @@ class LinkMobile(Link):
 
         args += [self.m_device]
 
-        #print 'Running pppd...'
+        logging.debug('Dialing...')
 
         try:
             # XXX: pppd output must be unbufered or read()/write() will block.
@@ -570,8 +568,14 @@ class LinkMobile(Link):
         self._pppd.terminate()
         self._pppd = None
 
-        self._modem.Disconnect()
-        self._modem.Enable(False)
+        def async():
+            try:
+                self._modem.Disconnect()
+                self._modem.Enable(False)
+            except dbus.DBusException:
+                pass
+
+        Thread(target=lambda: async()).start()
 
         try:
             subproc.call(['killall', 'pppd'])

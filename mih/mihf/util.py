@@ -55,7 +55,7 @@ def dhcp_release(ifname):
             raise e
 
         try:
-            subprocess.call(['dhclient', '-v', '-r', ifname])
+            subprocess.call(['dhclient', '-r', ifname])
         except OSError, e:
             if e.errno == errno.ENOENT:
                 logging.error('Neither dhcpcd nor dhclient were found.')
@@ -72,7 +72,7 @@ def dhcp_renew(ifname):
             raise e
 
         try:
-            subprocess.call(['dhclient', '-v', ifname])
+            subprocess.call(['dhclient', ifname])
         except OSError, e:
             if e.errno == errno.ENOENT:
                 logging.error('Neither dhcpcd nor dhclient were found.')

@@ -259,9 +259,9 @@ class LocalMihf(BasicMihf):
         return ready
 
     def _peek_links(self):
-        wifi = filter(lambda link: link.is_wifi(), self.links)
+        wifi = filter(lambda link: link.is_wifi(), self.links.values())
 
-        for link in wifi.values():
+        for link in wifi:
             if not link.up():
                 link.down()
 
@@ -272,7 +272,6 @@ class LocalMihf(BasicMihf):
     def _process_events(self):
         while self._equeue:
             link, state = self._equeue.pop()
-
 
             if self._handler:
                 fname = 'link_' + state.replace(' ', '_')

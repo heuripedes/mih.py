@@ -32,10 +32,10 @@ class MihServer:
 class MihClient:
     @staticmethod
     def link_up(mihf, link):
-        if link.remote or not link.is_ready():
-            return
-
         logging.info('Link %s is up', link)
+
+        if link.remote or not link.state:
+            return
 
         if mihf.current_link:
             # switch to non-mobile network
@@ -49,10 +49,10 @@ class MihClient:
 
     @staticmethod
     def link_down(mihf, link):
-        if link.remote or link.is_ready():
-            return
-
         logging.info('Link %s is down', link)
+
+        if link.remote or link.state:
+            return
 
         links = mihf.links.values()
         current = mihf.current_link
@@ -91,10 +91,10 @@ class MihClient:
 
     @staticmethod
     def link_going_down(mihf, link):
+        logging.info('Link %s is going down', link)
+
         if link.remote:
             return
-
-        logging.info('Link %s is going down', link)
 
         links = mihf.links.values()
         current = mihf.current_link
