@@ -1,6 +1,5 @@
 # vim: ts=8 sts=4 sw=4 et nu
 
-import os
 import collections
 import errno
 import subprocess as subproc
@@ -40,7 +39,7 @@ def get_local_ifnames():
     """
 
     # Local common interfaces pci/amr/virtual/etc
-    prefixes = ('lo', 'virbr', 'vboxnet', 'ppp0', 'mon.')
+    prefixes = ('lo', 'virbr', 'vboxnet', 'ppp', 'mon.')
     ifnames = [name for name in sockios.get_iflist() if not name.startswith(prefixes)]
     ifnames += mm.ModemManager.EnumerateDevices()
 
@@ -105,7 +104,7 @@ class Link(object):
 
     def __repr__(self):
         return '%s(name=%s, ipv4=%s)' % \
-                (self.__class__.__name__, self.ifname, self.__dict__.get('ipaddr'))
+                (self.__class__.__name__, self.ifname, self.ipaddr)
 
     def update(self, **kwargs):
         """Updates the link object state."""
@@ -178,8 +177,8 @@ class Link(object):
 
                 self.poll()
 
-                if not self.state:
-                    self.on_link_event(self, 'down')
+                #if not self.state:
+                #    self.on_link_event(self, 'down')
 
                 self.ipaddr = ''
             else:
@@ -190,8 +189,14 @@ class Link(object):
 
     def is_ready(self):
         """Checks whether the link is ready."""
-        return (getattr(self, '_ready', False) or
-                (self.state and len(self.ipaddr)))
+
+        if getattr(self, '_ready', False):
+            return True
+
+        if self.state and len(self.ipaddr) > 0:
+            return True
+
+        return False
 
     def as_dict(self):
         """Returns the link's internal state as a dict()."""
@@ -226,8 +231,6 @@ class Link80203(Link):
             self.strenght = WIRED_DOWN_STRENGHT
 
     def up(self):
-        super(Link80203, self).up()
-
         if self.is_ready():
             return True
 
@@ -239,8 +242,8 @@ class Link80203(Link):
 
         self.poll()
 
-        if self.is_ready():
-            self.on_link_event(self, 'up')
+        #if self.is_ready():
+        #    self.on_link_event(self, 'up')
 
         return self.is_ready()
 
@@ -388,11 +391,8 @@ class LinkMobile(Link):
         self.state = (self._modem.State == mm.MM_MODEM_STATE_CONNECTED)
 
         if not self.state:
-            self.ifname = ''
             return
 
-        self.ifname = 'ppp10'
-       
         status = None
         try:
             status = self._modem.GetStatus()
@@ -505,7 +505,7 @@ class LinkMobile(Link):
                 'password': MOBILE_GSM_PASS
                 }
 
-        self._modem.Connect(opts) # doesnt support timeout parameter
+        self._modem.Connect(opts)
 
         # Wait up to 3 secs until connected. (0.1s * 30 attempts = 3s)
         for _ in range(0, 30):

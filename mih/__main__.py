@@ -32,19 +32,27 @@ class MihServer:
 class MihClient:
     @staticmethod
     def link_up(mihf, link):
-        if link.remote:
+        if link.remote or not link.is_ready():
             return
 
-        if not mihf.current_link:
-            if not mihf.switch(link):
-                logging.info('Failed to switch to to %s.', link.ifname)
+        logging.info('Link %s is up', link)
 
-        mihf.discover(link)
+        if mihf.current_link:
+            # switch to non-mobile network
+            if mihf.current_link.is_mobile() and not link.is_mobile() and mihf.switch(link):
+                mihf.discover(link)
+        else:
+            if mihf.switch(link):
+                mihf.discover(link)
+            else:
+                logging.info('Failed to switch to to %s.', link.ifname)
 
     @staticmethod
     def link_down(mihf, link):
-        if link.remote:
+        if link.remote or link.is_ready():
             return
+
+        logging.info('Link %s is down', link)
 
         links = mihf.links.values()
         current = mihf.current_link
@@ -56,6 +64,7 @@ class MihClient:
 
         # find an alternative tech link related to server's link report
         if mihf.last_report:
+            logging.info('Inspecting server report...')
             alinks = find_alt_link(current, links, mihf.last_report)
             for alink in sorted(alinks, util.link_compare):
                 if mihf.switch(alink):
@@ -66,16 +75,17 @@ class MihClient:
 
         # switch to an up link if we can
         elif up_links:
+            logging.info('Searching for alternative link...')
             better = sorted(up_links, util.link_compare)[0]
 
             if mihf.switch(better):
                 mihf.discover(better)
 
+        # desperately try to bring one link up
         else:
-            logging.debug('Attempting to bring one link up...')
-            # try to set one link up when there's none available
+            logging.info('Attempting to bring one link up...')
             for lnk in sorted(links, util.link_compare):
-                if lnk != link and mihf.switch(lnk):
+                if mihf.switch(lnk):
                     mihf.discover(lnk)
                     break
 
@@ -83,6 +93,8 @@ class MihClient:
     def link_going_down(mihf, link):
         if link.remote:
             return
+
+        logging.info('Link %s is going down', link)
 
         links = mihf.links.values()
         current = mihf.current_link

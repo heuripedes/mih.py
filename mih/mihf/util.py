@@ -55,11 +55,12 @@ def dhcp_release(ifname):
             raise e
 
         try:
-            subprocess.call(['dhclient', '-r', ifname])
+            subprocess.call(['dhclient', '-v', '-r', ifname])
         except OSError, e:
-            if e.errno != errno.ENOENT:
+            if e.errno == errno.ENOENT:
+                logging.error('Neither dhcpcd nor dhclient were found.')
+            else:
                 raise e
-            logging.warning('Neither dhcpcd nor dhclient are installed.')
 
 
 def dhcp_renew(ifname):
@@ -71,11 +72,12 @@ def dhcp_renew(ifname):
             raise e
 
         try:
-            subprocess.call(['dhclient', ifname])
+            subprocess.call(['dhclient', '-v', ifname])
         except OSError, e:
-            if e.errno != errno.ENOENT:
+            if e.errno == errno.ENOENT:
+                logging.error('Neither dhcpcd nor dhclient were found.')
+            else:
                 raise e
-            logging.warning('Neither dhcpcd nor dhclient are installed.')
 
 
 def bind_sock_to_device(sock, dev=''):

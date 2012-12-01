@@ -82,21 +82,19 @@ class LocalMihf(BasicMihf):
 
         logging.debug('Switching from %s to %s...', self.current_link, link)
 
-        success = False
-        ho_begin = time.clock()  # handover begin
+        ho_begin = time.time()  # handover begin
         ho_from = self.current_link
         ho_to = link
 
-        if link.is_ready():
+        if link.is_ready() or link.up():
             success = True
         else:
-            if not link.up():
-                link.down()
-            else:
-                success = True
+            link.down()
+
+        success = link.is_ready()
 
         if success:
-            if self.current_link:
+            if self.current_link and link != self.current_link:
                 self.current_link.down()
 
             self.current_link = link
@@ -104,10 +102,10 @@ class LocalMihf(BasicMihf):
             if link.is_mobile():
                 self._next_peek = time.time() + self.PEEK_TIME
 
-        ho_time = time.clock() - ho_begin
+        ho_time = time.time() - ho_begin
         ho_status = 'successfully' if success else 'unsuccessfully'
 
-        logging.info('Handover from %s to %s finished %s in %.2fs',
+        logging.info('Handover from %s to %s finished %s in %is',
             ho_from, ho_to, ho_status, ho_time)
 
         return success
@@ -275,7 +273,6 @@ class LocalMihf(BasicMihf):
         while self._equeue:
             link, state = self._equeue.pop()
 
-            logging.info('Link %s is %s', link, state)
 
             if self._handler:
                 fname = 'link_' + state.replace(' ', '_')
