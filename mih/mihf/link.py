@@ -300,7 +300,7 @@ class Link80211(Link):
         super(Link80211, self).poll_and_notify()
 
         if self.state and self.is_going_down():
-                self.on_link_event(self, 'going down')
+            self.on_link_event(self, 'going down')
 
     def up(self):
         assert not self.remote
@@ -587,7 +587,7 @@ class LinkMobile(Link):
 
         try:
             subproc.call(['killall', 'pppd'])
-        except Exception:
+        except OSError:
             pass
 
         self.ifname = None
