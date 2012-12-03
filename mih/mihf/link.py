@@ -322,7 +322,7 @@ class Link80211(Link):
             cmd += ['key', key]
 
         cmd += ['mode', WIFI_MODE]
-        cmd += ['channel', WIFI_CHANNEL]
+        cmd += ['channel', str(WIFI_CHANNEL)]
 
         if subproc.call(cmd) != 0:
             return False
