@@ -370,6 +370,9 @@ class LinkMobile(Link):
             if self._modem.State == mm.MM_MODEM_STATE_CONNECTED:
                 self._detect_iface()
 
+        if 'ppp10' in sockios.get_iflist():
+            self.ifname = 'ppp10'
+
         super(LinkMobile, self).__init__(**kwargs)
 
     def update(self, *args, **kwargs):
@@ -562,15 +565,16 @@ class LinkMobile(Link):
     def down(self):
         assert not self.remote
 
-        if not self.state or not self._pppd:
+        if not self.state:
             return True
 
         success = super(LinkMobile, self).down()
 
-        util.set_blocking(self._pppd.stdout.fileno(), True)
-        util.set_blocking(self._pppd.stderr.fileno(), True)
-        self._pppd.terminate()
-        self._pppd = None
+        if self._pppd:
+            util.set_blocking(self._pppd.stdout.fileno(), True)
+            util.set_blocking(self._pppd.stderr.fileno(), True)
+            self._pppd.terminate()
+            self._pppd = None
 
         def async():
             try:
