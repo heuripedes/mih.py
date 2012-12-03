@@ -26,6 +26,8 @@ WIFI_ESSID = 'GREDES_MIH'
 WIFI_KEY = ''
 WIFI_THRESHOLD = 37
 WIFI_SAMPLES = 10
+WIFI_MODE = 'managed'
+WIFI_CHANNEL = 6
 
 # Mobile
 MOBILE_GSM_NUMBER = '*99#'
@@ -317,8 +319,10 @@ class Link80211(Link):
         cmd = ['iwconfig', self.ifname, 'essid', essid]
 
         if key:
-            cmd.append('key')
-            cmd.append(key)
+            cmd += ['key', key]
+
+        cmd += ['mode', WIFI_MODE]
+        cmd += ['channel', WIFI_CHANNEL]
 
         if subproc.call(cmd) != 0:
             return False
