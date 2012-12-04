@@ -26,6 +26,8 @@ WIFI_ESSID = 'GREDES_MIH'
 WIFI_KEY = ''
 WIFI_THRESHOLD = 37
 WIFI_SAMPLES = 10
+WIFI_MODE = 'managed'
+WIFI_CHANNEL = 6
 
 # Mobile
 MOBILE_GSM_NUMBER = '*99#'
@@ -298,7 +300,7 @@ class Link80211(Link):
         super(Link80211, self).poll_and_notify()
 
         if self.state and self.is_going_down():
-                self.on_link_event(self, 'going down')
+            self.on_link_event(self, 'going down')
 
     def up(self):
         assert not self.remote
@@ -317,8 +319,10 @@ class Link80211(Link):
         cmd = ['iwconfig', self.ifname, 'essid', essid]
 
         if key:
-            cmd.append('key')
-            cmd.append(key)
+            cmd += ['key', key]
+
+        cmd += ['mode', WIFI_MODE]
+        cmd += ['channel', str(WIFI_CHANNEL)]
 
         if subproc.call(cmd) != 0:
             return False
@@ -365,6 +369,9 @@ class LinkMobile(Link):
 
             if self._modem.State == mm.MM_MODEM_STATE_CONNECTED:
                 self._detect_iface()
+
+        if 'ppp10' in sockios.get_iflist():
+            self.ifname = 'ppp10'
 
         super(LinkMobile, self).__init__(**kwargs)
 
@@ -558,15 +565,16 @@ class LinkMobile(Link):
     def down(self):
         assert not self.remote
 
-        if not self.state or not self._pppd:
+        if not self.state:
             return True
 
         success = super(LinkMobile, self).down()
 
-        util.set_blocking(self._pppd.stdout.fileno(), True)
-        util.set_blocking(self._pppd.stderr.fileno(), True)
-        self._pppd.terminate()
-        self._pppd = None
+        if self._pppd:
+            util.set_blocking(self._pppd.stdout.fileno(), True)
+            util.set_blocking(self._pppd.stderr.fileno(), True)
+            self._pppd.terminate()
+            self._pppd = None
 
         def async():
             try:
@@ -579,7 +587,7 @@ class LinkMobile(Link):
 
         try:
             subproc.call(['killall', 'pppd'])
-        except Exception:
+        except OSError:
             pass
 
         self.ifname = None
