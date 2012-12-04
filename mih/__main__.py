@@ -7,6 +7,7 @@ import logging
 
 
 def find_alt_link(current, llinks, rlinks):
+    """Find local links compatible to remote links."""
     for rlink in rlinks:
         # discard same-technology links
         if rlink.technology == current.technology:
@@ -23,6 +24,17 @@ def find_alt_link(current, llinks, rlinks):
 
             if llink.technology == rlink.technology:
                 yield llink
+
+
+def switch_to_better(func, links):
+    """Switches to the better link in links."""
+    links = sorted(links, util.link_compare)
+
+    for link in links:
+        if func.switch(link):
+            func.discover(link)
+            return True
+    return False
 
 
 class MihServer:
@@ -56,7 +68,7 @@ class MihClient:
 
         links = func.links.values()
         current = func.current_link
-        up_links = [l for l in links if l.is_ready()]
+        up_links = [l for l in links if l.state]
 
         # nothing else to do.
         if current != link:
@@ -65,29 +77,21 @@ class MihClient:
         # find an alternative tech link related to server's link report
         if func.last_report:
             logging.info('Inspecting server report...')
+
             alinks = find_alt_link(current, links, func.last_report)
-            for alink in sorted(alinks, util.link_compare):
-                if func.switch(alink):
-                    func.discover(alink)
-                    break
+            switch_to_better(func, alinks)
 
             func.last_report = None
 
         # switch to an up link if we can
         elif up_links:
             logging.info('Searching for alternative link...')
-            better = sorted(up_links, util.link_compare)[0]
-
-            if func.switch(better):
-                func.discover(better)
+            switch_to_better(func, up_links)
 
         # desperately try to bring one link up
         else:
             logging.info('Attempting to bring one link up...')
-            for lnk in sorted(links, util.link_compare):
-                if func.switch(lnk):
-                    func.discover(lnk)
-                    break
+            switch_to_better(func, links)
 
     @staticmethod
     def link_going_down(func, link):
@@ -104,10 +108,8 @@ class MihClient:
 
         if func.last_report:
             alinks = find_alt_link(current, links, func.last_report)
-            for alink in sorted(alinks, util.link_compare):
-                if func.switch(alink):
-                    func.discover(link)
-                    break
+
+            switch_to_better(func, alinks)
 
             func.last_report = None
         else:
