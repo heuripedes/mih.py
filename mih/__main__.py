@@ -142,14 +142,14 @@ def main():
         level=getattr(logging, args.loglevel)
     )
 
-    f = None
+    func = None
 
     if args.server:
-        f = mihf.ServerMihf(MihServer)
+        func = mihf.ServerMihf(MihServer)
     else:
-        f = mihf.ClientMihf(MihClient)
+        func = mihf.ClientMihf(MihClient)
 
-    f.run()
+    func.run()
 
     sys.exit(0)
 
