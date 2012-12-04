@@ -31,31 +31,31 @@ class MihServer:
 
 class MihClient:
     @staticmethod
-    def link_up(mihf, link):
+    def link_up(func, link):
         logging.info('Link %s is up', link)
 
         if link.remote or not link.state:
             return
 
-        if mihf.current_link:
+        if func.current_link:
             # switch to non-mobile network
-            if mihf.current_link.is_mobile() and not link.is_mobile() and mihf.switch(link):
-                mihf.discover(link)
+            if func.current_link.is_mobile() and not link.is_mobile() and func.switch(link):
+                func.discover(link)
         else:
-            if mihf.switch(link):
-                mihf.discover(link)
+            if func.switch(link):
+                func.discover(link)
             else:
                 logging.info('Failed to switch to to %s.', link.ifname)
 
     @staticmethod
-    def link_down(mihf, link):
+    def link_down(func, link):
         logging.info('Link %s is down', link)
 
         if link.remote or link.state:
             return
 
-        links = mihf.links.values()
-        current = mihf.current_link
+        links = func.links.values()
+        current = func.current_link
         up_links = [l for l in links if l.is_ready()]
 
         # nothing else to do.
@@ -63,55 +63,55 @@ class MihClient:
             return
 
         # find an alternative tech link related to server's link report
-        if mihf.last_report:
+        if func.last_report:
             logging.info('Inspecting server report...')
-            alinks = find_alt_link(current, links, mihf.last_report)
+            alinks = find_alt_link(current, links, func.last_report)
             for alink in sorted(alinks, util.link_compare):
-                if mihf.switch(alink):
-                    mihf.discover(alink)
+                if func.switch(alink):
+                    func.discover(alink)
                     break
 
-            mihf.last_report = None
+            func.last_report = None
 
         # switch to an up link if we can
         elif up_links:
             logging.info('Searching for alternative link...')
             better = sorted(up_links, util.link_compare)[0]
 
-            if mihf.switch(better):
-                mihf.discover(better)
+            if func.switch(better):
+                func.discover(better)
 
         # desperately try to bring one link up
         else:
             logging.info('Attempting to bring one link up...')
             for lnk in sorted(links, util.link_compare):
-                if mihf.switch(lnk):
-                    mihf.discover(lnk)
+                if func.switch(lnk):
+                    func.discover(lnk)
                     break
 
     @staticmethod
-    def link_going_down(mihf, link):
+    def link_going_down(func, link):
         logging.info('Link %s is going down', link)
 
         if link.remote:
             return
 
-        links = mihf.links.values()
-        current = mihf.current_link
+        links = func.links.values()
+        current = func.current_link
 
         if current != link:
             return
 
-        if mihf.last_report:
-            alinks = find_alt_link(current, links, mihf.last_report)
+        if func.last_report:
+            alinks = find_alt_link(current, links, func.last_report)
             for alink in sorted(alinks, util.link_compare):
-                if mihf.switch(alink):
-                    mihf.discover(alink)
+                if func.switch(alink):
+                    func.discover(link)
                     break
 
-            mihf.last_report = None
+            func.last_report = None
         else:
-            mihf.report()
+            func.report()
 
 
 def main():
