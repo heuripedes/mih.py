@@ -106,7 +106,7 @@ class MihClient:
             alinks = find_alt_link(current, links, mihf.last_report)
             for alink in sorted(alinks, util.link_compare):
                 if mihf.switch(alink):
-                    mihf.discover(link)
+                    mihf.discover(alink)
                     break
 
             mihf.last_report = None
