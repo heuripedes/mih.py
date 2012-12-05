@@ -21,18 +21,18 @@ class Message(object):
         self.payload = kw.pop('payload', None)
 
     def __repr__(self):
-        s = ''
-        for k, v in self.__dict__.items():
-            if not k.startswith('_'):
-                s += '%s=%s, ' % (k, v)
+        buf = ''
+        for key, value in self.__dict__.items():
+            if not key.startswith('_'):
+                buf += '%s=%s, ' % (key, value)
 
-        return 'Message(%s)' % s.rstrip(', ')
+        return 'Message(%s)' % buf.rstrip(', ')
 
     def __getstate__(self):
         dic = self.__dict__.copy()
-        for k in dic.keys():
-            if k.startswith('_'):
-                del dic[k]
+        for key in dic.keys():
+            if key.startswith('_'):
+                del dic[key]
 
         return dic
 

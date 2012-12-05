@@ -50,34 +50,34 @@ def dhcp_release(ifname):
     """Obtain a DHCP lease for `ifname`."""
     try:
         subprocess.call(['dhcpcd', '--release', ifname])
-    except OSError, e:
-        if e.errno != errno.ENOENT:
-            raise e
+    except OSError, err:
+        if err.errno != errno.ENOENT:
+            raise err
 
         try:
             subprocess.call(['dhclient', '-r', ifname])
-        except OSError, e:
-            if e.errno == errno.ENOENT:
+        except OSError, err:
+            if err.errno == errno.ENOENT:
                 logging.error('Neither dhcpcd nor dhclient were found.')
             else:
-                raise e
+                raise err
 
 
 def dhcp_renew(ifname):
     """Renews `ifname`'s DHCP lease."""
     try:
         subprocess.call(['dhcpcd', '--rebind', ifname])
-    except OSError, e:
-        if e.errno != errno.ENOENT:
-            raise e
+    except OSError, err:
+        if err.errno != errno.ENOENT:
+            raise err
 
         try:
             subprocess.call(['dhclient', ifname])
-        except OSError, e:
-            if e.errno == errno.ENOENT:
+        except OSError, err:
+            if err.errno == errno.ENOENT:
                 logging.error('Neither dhcpcd nor dhclient were found.')
             else:
-                raise e
+                raise err
 
 
 def bind_sock_to_device(sock, dev=''):
@@ -95,13 +95,13 @@ def match_output(pattern, cmd):
     return re.findall(pattern, subprocess.check_output(cmd))
 
 
-def set_blocking(fd, blocking):
-    """Enables or disables the blocking I/O on `fd`."""
+def set_blocking(fildes, blocking):
+    """Enables or disables the blocking I/O on `fildes`."""
     import fcntl
 
-    flags = fcntl.fcntl(fd, fcntl.F_GETFL)
-    flags = os.O_NONBLOCK * (blocking == False)
-    fcntl.fcntl(fd, fcntl.F_SETFL, flags)
+    flags = fcntl.fcntl(fildes, fcntl.F_GETFL)
+    flags = flags | (os.O_NONBLOCK * (blocking == False))
+    fcntl.fcntl(fildes, fcntl.F_SETFL, flags)
 
 
 def link_value(link):

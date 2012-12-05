@@ -207,10 +207,10 @@ class LocalMihf(BasicMihf):
         exported = []
 
         for link in self.links.values():
-            d = link.as_dict()
-            d['remote'] = True
+            dic = link.as_dict()
+            dic['remote'] = True
 
-            exported.append(d)
+            exported.append(dic)
 
         return exported
 
