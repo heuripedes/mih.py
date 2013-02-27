@@ -48,6 +48,9 @@ def pickle(obj):
 
 def dhcp_release(ifname):
     """Obtain a DHCP lease for `ifname`."""
+
+    logging.info('Releasing %s...', ifname)
+
     try:
         subprocess.call(['dhcpcd', '--release', ifname])
     except OSError, err:
@@ -65,6 +68,9 @@ def dhcp_release(ifname):
 
 def dhcp_renew(ifname):
     """Renews `ifname`'s DHCP lease."""
+    
+    logging.info('Renewing %s DHCP lease...', ifname)
+
     try:
         subprocess.call(['dhcpcd', '--rebind', ifname])
     except OSError, err:
