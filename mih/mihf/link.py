@@ -229,6 +229,13 @@ class Link80203(Link):
     def poll(self):
         super(Link80203, self).poll()
 
+        if not self.remote:
+            try:
+                self.state = self.state and sockios.is_running(self.ifname)
+            except OSError, e:
+                # something happened, the interface might be down
+                self.state = False
+
         if self.state and self.ipaddr:
             self.strenght = WIRED_UP_STRENGHT
         else:
