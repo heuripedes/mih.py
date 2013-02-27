@@ -270,8 +270,17 @@ class LocalMihf(BasicMihf):
             self._handle_message(addr, msg)
 
     def _process_events(self):
+        processed = list()
+
         while self._equeue:
             link, state = self._equeue.pop()
+
+            # only the latest event is valid for a given link
+            if not link in processed:
+                processed.append(link)
+            else:
+                logging.debug('Dropped %s event for %s', state, link)
+                continue
 
             if self._handler:
                 fname = 'link_' + state.replace(' ', '_')
