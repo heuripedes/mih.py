@@ -42,8 +42,26 @@ class MihServer:
 
 
 class MihClient:
+    """Comodity class to group client-specific behaviour.
+
+    This class is composed by three main methods, which are triggers for the 
+    link events emited by the MIHF: `link_up`, `link_down`, `link_going_down`. 
+    All methods perform link switching but each employs a different heuristic. 
+    It should be noted that they only perform link switching to/from local 
+    links."""
+
+    def __init__(self):
+        pass
+
     @staticmethod
     def link_up(func, link):
+        """Trigger for the link up event.
+
+        This method will switch to the link which triggered the event when the 
+        MIHF is not connected to any other link. If the link which triggered the
+        event is considered to be better than the current link, `discovery` is 
+        called on it."""
+
         logging.info('Link %s is up', link)
 
         if link.remote or not link.state:
@@ -55,12 +73,24 @@ class MihClient:
                 func.discover(link)
         else:
             if func.switch(link):
+                # XXX: is this needed? wont the up event perform this anyways?
                 func.discover(link)
+                pass
             else:
                 logging.info('Failed to switch to to %s.', link.ifname)
 
     @staticmethod
     def link_down(func, link):
+        """Trigger for the link down event.
+
+        This method will not perform any link switching unless the down link is 
+        the currently connected one. In that case, the method will inspec the 
+        results of the last `discovery` looking for an alternative technology 
+        link. If there's no cached discovery result, the method will try to 
+        switch to the best link that happens to be up. If there's no up link, 
+        the method will attempt to bring any link up."""
+
+
         logging.info('Link %s is down', link)
 
         if link.remote or link.state:
@@ -95,6 +125,12 @@ class MihClient:
 
     @staticmethod
     def link_going_down(func, link):
+        """Trigger for the link_going_down event
+
+        This method will perform link switching only when 
+        there's an cached `discovery` report. The method will instruct the MIHF 
+        to switch to the available link with the best technology."""
+
         logging.info('Link %s is going down', link)
 
         if link.remote:
