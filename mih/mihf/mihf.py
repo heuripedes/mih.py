@@ -79,34 +79,42 @@ class LocalMihf(BasicMihf):
         self._send(None, 'mih_discovery.request', daddr=('<broadcast>', self.PORT), link=link)
 
     def switch(self, link):
+        success = False
 
-        logging.debug('Switching from %s to %s...', self.current_link, link)
-
-        ho_begin = time.time()  # handover begin
-        ho_from = self.current_link
-        ho_to = link
-
-        if link.is_ready() or link.up():
-            success = True
+        if self.current_link == link:
+            success = link.is_ready() or link.up()
+            if success:
+                logging.info('Connection %s reestablished.', link)
+            else:
+                logging.info('Failed to reestablish %s connection.', link)
         else:
-            link.down()
+            logging.debug('Switching from %s to %s...', self.current_link, link)
 
-        success = link.is_ready()
+            ho_begin = time.time()  # handover begin
+            ho_from = self.current_link
+            ho_to = link
 
-        if success:
-            if self.current_link and link != self.current_link:
-                self.current_link.down()
+            if link.is_ready() or link.up():
+                success = True
+            else:
+                link.down()
 
-            self.current_link = link
+            success = link.is_ready()
 
-            if link.is_mobile():
-                self._next_peek = time.time() + self.PEEK_TIME
+            if success:
+                if self.current_link and link != self.current_link:
+                    self.current_link.down()
 
-        ho_time = time.time() - ho_begin
-        ho_status = 'successfully' if success else 'unsuccessfully'
+                self.current_link = link
 
-        logging.info('Handover from %s to %s finished %s in %is',
-            ho_from, ho_to, ho_status, ho_time)
+                if link.is_mobile():
+                    self._next_peek = time.time() + self.PEEK_TIME
+
+            ho_time = time.time() - ho_begin
+            ho_status = 'successfully' if success else 'unsuccessfully'
+
+            logging.info('Handover from %s to %s finished %s in %is',
+                ho_from, ho_to, ho_status, ho_time)
 
         return success
 
