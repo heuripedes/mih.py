@@ -18,6 +18,7 @@ start:
 	echo > $(dnsmasq_conf)
 	echo -e 'interface=$(incoming)\nssid=$(ssid)' > $(hostapd_conf)
 	echo -e 'driver=nl80211\nhw_mode=g\nchannel=6' >> $(hostapd_conf)
+	rfkill unblock all
 	hostapd -B -P $(hostapd_pid) $(hostapd_conf)
 	ifconfig $(incoming) 192.168.0.1
 	sysctl net.ipv4.ip_forward=1
@@ -33,9 +34,10 @@ stop:
 	-kill `cat $(hostapd_pid)`
 	-kill `cat $(dnsmasq_pid)`
 	iptables -t nat -F
-	service dnsmasq start
+	-service dnsmasq start
 
 clean: stop
+	
 	-rm -f $(hostapd_pid) $(hostapd_conf) $(dnsmasq_pid) $(dnsmasq_conf)
 
 
