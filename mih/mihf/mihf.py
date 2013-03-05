@@ -66,7 +66,7 @@ class LocalMihf(BasicMihf):
         self._iqueue = collections.deque()
 
         # event queue
-        self._equeue = collections.deque()
+        self._equeue = list() #collections.deque()
 
     def discover(self, link):
 
@@ -207,6 +207,11 @@ class LocalMihf(BasicMihf):
         pass
 
     def _handle_link_event(self, link, state):
+        # replace previous events on the link
+        for i in xrange(0, len(self._equeue)):
+            if self._equeue[i][0] == link:
+                del self._equeue[i]
+
         self._equeue.append((link, state))
 
     def _export_links(self):
@@ -278,17 +283,17 @@ class LocalMihf(BasicMihf):
             self._handle_message(addr, msg)
 
     def _process_events(self):
-        processed = list()
+        #processed = list()
 
         while self._equeue:
             link, state = self._equeue.pop()
 
             # only the latest event is valid for a given link
-            if not link in processed:
-                processed.append(link)
-            else:
-                logging.debug('Dropped %s event for %s', state, link)
-                continue
+            #if not link in processed:
+            #    processed.append(link)
+            #else:
+            #    logging.debug('Dropped %s event for %s', state, link)
+            #    continue
 
             if self._handler:
                 fname = 'link_' + state.replace(' ', '_')
