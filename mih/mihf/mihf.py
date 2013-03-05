@@ -348,6 +348,7 @@ class ClientMihf(LocalMihf):
             ready = self._refresh_links()
 
             if not ready:
+                logging.warning('No ready link could be found, trying to bring one up')
                 for link in self.links.values():
                     if self.switch(link):
                         break

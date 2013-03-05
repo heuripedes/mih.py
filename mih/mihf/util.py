@@ -100,7 +100,7 @@ def dhcp_release(ifname):
 
 def dhcp_renew(ifname):
     """Renews `ifname`'s DHCP lease."""
-    
+
     logging.info('Renewing %s DHCP lease...', ifname)
 
     try:

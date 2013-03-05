@@ -92,6 +92,7 @@ class Link(object):
         self.on_link_event = lambda (a, b): None  # callbacks
 
         self.update(**kwargs)
+
         #self.poll()
 
     def is_wifi(self):
@@ -378,6 +379,7 @@ class LinkMobile(Link):
             if self._modem.State == mm.MM_MODEM_STATE_CONNECTED:
                 self._detect_iface()
 
+        # TODO: try to restore a previous session
         if 'ppp10' in sockios.get_iflist():
             self.ifname = 'ppp10'
 
