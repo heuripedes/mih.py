@@ -272,7 +272,19 @@ class LocalMihf(BasicMihf):
         return ready
 
     def _peek_links(self):
-        wifi = filter(lambda link: link.is_wifi(), self.links.values())
+        """Check if there are alternative wireless links available.
+
+        When the current link is a mobile one, this method is called
+        every PEEK_TIME seconds to check if there are available links on
+        in the environment."""
+
+        # XXX: what is cheaper?
+        #      (a) enable + disable (on failure)
+        #      (b) keep it enabled and just check to see if it is ready?
+
+        logging.debug('Peeking links')
+        #wifi = filter(lambda link: link.is_wifi(), self.links.values())
+        wifi = [link for link in self.links.values() if link.is_wifi()]
 
         for link in wifi:
             if not link.up():
