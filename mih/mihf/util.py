@@ -7,6 +7,7 @@ import errno
 import shlex
 import re
 import logging
+import time
 
 import cPickle
 import pickletools
@@ -45,6 +46,37 @@ def pickle(obj):
     """Serializes and optimizes `obj`."""
     return pickletools.optimize(cPickle.dumps(obj))
 
+def call_timeout(args, **kwargs):
+    """Implementation of subprocess.call that accepts a timeout.
+
+    The default timeout is 20 seconds.
+
+    Returns None if the process times out or the subprocess
+    exit code"""
+
+    timeout = kwargs.pop('timeout', 20)
+    assert timeout > 0
+
+    endtime = time.time() + timeout
+
+    proc = subprocess.Popen(args, **kwargs)
+    
+    try:
+        while time.time() < endtime:
+            if proc.poll() != None:
+                return proc.returncode
+            time.sleep(1 * 0.05)
+    except:
+        raise
+
+    try:
+        proc.kill()
+        print 'Killed "%s" (timeout).' % args[0]
+    except:
+        pass
+
+    return None
+
 
 def dhcp_release(ifname):
     """Obtain a DHCP lease for `ifname`."""
@@ -58,7 +90,7 @@ def dhcp_release(ifname):
             raise err
 
         try:
-            subprocess.call(['dhclient', '-r', ifname])
+            call_timeout(['dhclient', '-1', '-r', ifname], timeout=5)
         except OSError, err:
             if err.errno == errno.ENOENT:
                 logging.error('Neither dhcpcd nor dhclient were found.')
@@ -78,7 +110,7 @@ def dhcp_renew(ifname):
             raise err
 
         try:
-            subprocess.call(['dhclient', ifname])
+            call_timeout(['dhclient', '-1', ifname], timeout=5)
         except OSError, err:
             if err.errno == errno.ENOENT:
                 logging.error('Neither dhcpcd nor dhclient were found.')
