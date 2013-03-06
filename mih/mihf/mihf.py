@@ -7,7 +7,6 @@ import logging
 import collections
 
 import mih.mihf.util as util
-#from mih.mihf.link import *
 from mih.mihf.link import get_local_ifnames
 from mih.mihf.link import make_link
 from mih.mihf.link import Link
@@ -151,6 +150,7 @@ class LocalMihf(BasicMihf):
         self._oqueue.append((link, msg))
 
     def _receive(self):
+        """Generator for the input queue."""
         while self._iqueue:
             yield self._iqueue.pop()
 
@@ -209,7 +209,7 @@ class LocalMihf(BasicMihf):
     def _handle_link_event(self, link, state):
         # replace previous events on the link
         for i in xrange(0, len(self._equeue)):
-            if self._equeue[i][0] == link:
+            if self._equeue and self._equeue[i][0] == link:
                 del self._equeue[i]
 
         self._equeue.append((link, state))
@@ -272,7 +272,7 @@ class LocalMihf(BasicMihf):
         return ready
 
     def _peek_links(self):
-        """Check if there are alternative wireless links available.
+        """Check if there are non-mobile links available.
 
         When the current link is a mobile one, this method is called
         every PEEK_TIME seconds to check if there are available links on
@@ -283,8 +283,7 @@ class LocalMihf(BasicMihf):
         #      (b) keep it enabled and just check to see if it is ready?
 
         logging.debug('Peeking links')
-        #wifi = filter(lambda link: link.is_wifi(), self.links.values())
-        wifi = [link for link in self.links.values() if link.is_wifi()]
+        wifi = [link for link in self.links.values() if not link.is_mobile()]
 
         for link in wifi:
             if not link.up():
@@ -295,18 +294,17 @@ class LocalMihf(BasicMihf):
             self._handle_message(addr, msg)
 
     def _process_events(self):
-        #processed = list()
+        """Processes the event queue.
 
-        while self._equeue:
-            link, state = self._equeue.pop()
+        This method iterates through the event queue and calls the
+        respective event handles, when found.
+        
+        The event queue is cleared."""
 
-            # only the latest event is valid for a given link
-            #if not link in processed:
-            #    processed.append(link)
-            #else:
-            #    logging.debug('Dropped %s event for %s', state, link)
-            #    continue
-
+        events = list(self._equeue)
+        self._equeue = list()
+        
+        for link, state in events:
             if self._handler:
                 fname = 'link_' + state.replace(' ', '_')
 
@@ -348,7 +346,7 @@ class ClientMihf(LocalMihf):
             ready = self._refresh_links()
 
             if not ready:
-                logging.warning('No ready link could be found, trying to bring one up')
+                logging.warning('No ready link found, trying to bring one up')
                 for link in self.links.values():
                     if self.switch(link):
                         break
