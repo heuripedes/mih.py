@@ -62,7 +62,7 @@ class MessageManager(object):
 
             for _ in range(0, self.maxattempts):
                 try:
-                    sent += sock.sendto(data, 0, msg.daddr)
+                    sent += sock.sendto(data[sent:], 0, msg.daddr)
                 except socket.timeout:
                     continue
 
