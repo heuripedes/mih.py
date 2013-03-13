@@ -10,6 +10,7 @@ import mih.mihf.util as util
 from mih.mihf.link import get_local_ifnames
 from mih.mihf.link import make_link
 from mih.mihf.link import Link
+from mih.mihf.messagemanager import MessageManager
 
 from mih.mihf.message import Message
 
@@ -38,8 +39,6 @@ class BasicMihf(object):
 
 
 class LocalMihf(BasicMihf):
-    MSG_SIZE = 4096
-    MAX_RECV = 10
     PEEK_TIME = 10
     PORT = 12345
 
@@ -61,8 +60,7 @@ class LocalMihf(BasicMihf):
 
         self._ready_cache = list()
 
-        self._oqueue = collections.deque()
-        self._iqueue = collections.deque()
+        self._msgmngr = MessageManager()
 
         # event queue
         self._equeue = list() #collections.deque()
@@ -141,67 +139,14 @@ class LocalMihf(BasicMihf):
         if not daddr:
             daddr = self._peers[dmihf].addr
 
-        msg = Message(
-                smihf=self.name, dmihf=dmihf,
-                kind=kind, payload=payload, parent=parent,
-                daddr=daddr
-                )
-
-        self._oqueue.append((link, msg))
-
-    def _receive(self):
-        """Generator for the input queue."""
-        while self._iqueue:
-            yield self._iqueue.pop()
-
-    def _flush_buffer(self):
-        """Flushes the output queue into the socket."""
-
-        while self._oqueue:
-            link, msg = self._oqueue.pop()
-
-            if link:
-                util.bind_sock_to_device(self._sock, link)
-
-            logging.debug("Sending %s to %s", msg.kind, msg.daddr)
-
-            sent = 0
-            attempts = 4
-
-            while not sent and attempts:
-                try:
-                    data = util.pickle(msg).ljust(self.MSG_SIZE, '\x00')
-                    sent += self._sock.sendto(data, 0, msg.daddr)
-
-                except socket.timeout:
-                    attempts -= 1
-
-            if not attempts:
-                logging.warning('Failed to send message to %s: too many timeouts', msg.daddr)
-
-            if link:
-                util.bind_sock_to_device(self._sock, '')
-
-    def _fill_buffer(self):
-        """Fills the input queue."""
-
-        count = self.MAX_RECV
-
-        while count:
-            data, addr = '', (None, None)
-
-            try:
-                data, addr = self._sock.recvfrom(self.MSG_SIZE)
-            except socket.timeout:
-                break
-
-            data = data.rstrip('\x00')
-
-            if data:
-                msg = util.unpickle(data)
-                count -= 1
-
-            self._iqueue.append((addr, msg))
+        self._msgmngr.send(
+                self.name,
+                daddr,
+                kind,
+                dmihf=dmihf,
+                payload=payload,
+                parent=parent,
+                link=link)
 
     def _handle_message(self, srcaddr, msg):
         pass
@@ -290,7 +235,7 @@ class LocalMihf(BasicMihf):
                 link.down()
 
     def _proccess_messages(self):
-        for addr, msg in self._receive():
+        for addr, msg in self._msgmngr.receive():
             self._handle_message(addr, msg)
 
     def _process_events(self):
@@ -340,7 +285,7 @@ class ClientMihf(LocalMihf):
         self._scan_links()
 
         while True:
-            self._fill_buffer()
+            self._msgmngr.fill_queue(self._sock)
             self._proccess_messages()
 
             ready = self._refresh_links()
@@ -353,7 +298,7 @@ class ClientMihf(LocalMihf):
 
             self._process_events()
 
-            self._flush_buffer()
+            self._msgmngr.flush_queue(self._sock)
 
     def report(self):
 
@@ -416,7 +361,7 @@ class ServerMihf(LocalMihf):
         self._scan_links()
 
         while True:
-            self._fill_buffer()
+            self._msgmngr.fill_queue(self._sock)
             self._proccess_messages()
 
             ready = self._refresh_links()
@@ -427,7 +372,7 @@ class ServerMihf(LocalMihf):
 
             self._process_events()
 
-            self._flush_buffer()
+            self._msgmngr.flush_queue(self._sock)
 
     def _handle_message(self, srcaddr, msg):
 
