@@ -336,6 +336,10 @@ class Link80211(Link):
         if subproc.call(cmd) != 0:
             return False
 
+        if util.match_output('Not-Associated', ['iwconfig', self.ifname]):
+            #logging.warning('Failed to associate %s to %s', self.ifname, essid)
+            return False
+
         util.dhcp_release(self.ifname)
         util.dhcp_renew(self.ifname)
 
