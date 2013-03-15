@@ -205,15 +205,19 @@ class Link(object):
 
     def as_dict(self):
         """Returns the link's internal state as a dict()."""
-        d = self.__dict__.copy()
+        dic = {}
+        for key, val in self.__dict__:
+            if key[0] == '_':
+                continue
 
-        if self.remote and hasattr(d, '_ready'):
-            d['ready'] = d['_ready']
-            del d['_ready']
+            dic[key] = val
 
-        del d['on_link_event']
+        if self.remote and hasattr(self, '_ready'):
+            dic['ready'] = getattr(self, '_ready')
 
-        return d
+        del dic['on_link_event']
+
+        return dic
 
 
 class Link80203(Link):
@@ -610,3 +614,4 @@ class LinkMobile(Link):
 
     def is_going_down(self):
         return super(LinkMobile, self).is_going_down()
+

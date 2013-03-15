@@ -67,6 +67,9 @@ class Modem(object):
     def __getattr__(self, name):
         return self._props.Get(MM_DBUS_INTERFACE_MODEM, name)
 
+    def __getstate__(self):
+        return {}
+
     @property
     def State(self):
         """Wrapper for org.freedesktop.ModemManager.Modem.State property."""
