@@ -33,18 +33,31 @@ WIFI_CHANNEL = 6
 # Mobile
 MOBILE_GSM_NUMBER = '*99#'
 MOBILE_GSM_APN = 'gprs.oi.com.br'
-MOBILE_GSM_USER = 'oi'
-MOBILE_GSM_PASS = 'oi'
+#MOBILE_GSM_USER = 'oi'
+#MOBILE_GSM_PASS = 'oi'
+MOBILE_GSM_USER = ''
+MOBILE_GSM_PASS = 'oioioi'
 
+def filter_invalid_ifnames():
+    ifnames = sockios.get_iflist()
+
+    for ifname in ifnames:
+        # skip bridges
+        if re.search(r'(br\d+$|^tun|^tap)', ifname):
+            continue
+
+        # skip local, virtual, ppp and monitoring interfaces
+        if re.search(r'^(lo|vbox|vir|ppp|mon)', ifname):
+            continue
+
+        yield ifname
 
 def get_local_ifnames():
     """
     Looks for links in /proc/net/dev
     """
 
-    # Local common interfaces pci/amr/virtual/etc
-    prefixes = ('lo', 'virbr', 'vboxnet', 'ppp', 'mon.')
-    ifnames = [name for name in sockios.get_iflist() if not name.startswith(prefixes)]
+    ifnames = list(filter_invalid_ifnames())
     ifnames += mm.ModemManager.EnumerateDevices()
 
     return ifnames
