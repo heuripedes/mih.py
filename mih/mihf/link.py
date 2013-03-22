@@ -219,9 +219,14 @@ class Link(object):
     def as_dict(self):
         """Returns the link's internal state as a dict()."""
         dic = {}
-        for key, val in self.__dict__:
+        for key, val in self.__dict__.items():
             if key[0] == '_':
                 continue
+
+            if isinstance(val, dbus.String):
+                val = val.encode('utf-8')
+            elif isinstance(val, dbus.UInt32):
+                val = int(val)
 
             dic[key] = val
 
