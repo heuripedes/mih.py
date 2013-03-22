@@ -143,6 +143,9 @@ class Link(object):
         except sockios.error:
             self.ipaddr = ''
 
+        if self.ipaddr == '127.0.0.1':
+            self.ipaddr = ''
+
     def poll(self):
         """Refreshes the link object's state."""
         assert not self.remote
@@ -176,8 +179,8 @@ class Link(object):
 
         if not self.state:
             sockios.set_up(self.ifname)
-
-            self.poll()
+            time.sleep(0.1)
+            self.state = sockios.is_up(self.ifname)
 
         return self.state
 
@@ -193,15 +196,14 @@ class Link(object):
 
                 sockios.set_down(self.ifname)
 
-                self.poll()
-
                 #if not self.state:
                 #    self.on_link_event(self, 'down')
 
-                self.ipaddr = ''
-            else:
+            elif self.ifname:
                 sockios.set_down(self.ifname)
-                self.poll()
+
+            self.poll()
+            self.ipaddr = ''
 
         return not self.state
 
@@ -271,6 +273,10 @@ class Link80203(Link):
         if not super(Link80203, self).up():
             return False
 
+        # cable not connected
+        if not sockios.is_running(self.ifname):
+            return False
+
         util.dhcp_release(self.ifname)
         util.dhcp_renew(self.ifname)
 
@@ -309,6 +315,9 @@ class Link80211(Link):
         if self.mode == 'master':
             return
 
+        if self.state and util.match_output('Not-Associated', ['iwconfig', self.ifname]):
+            self.state = False
+
         # Collect signal strenght samples
         if self.is_ready():
             try:
@@ -345,18 +354,20 @@ class Link80211(Link):
             return False
 
         essid = WIFI_ESSID
-        key = WIFI_KEY
+        #key = WIFI_KEY
 
         cmd = ['iwconfig', self.ifname, 'essid', essid]
 
-        if key:
-            cmd += ['key', key]
+        #if key:
+        #    cmd += ['key', key]
 
-        cmd += ['mode', WIFI_MODE]
-        cmd += ['channel', str(WIFI_CHANNEL)]
+        #cmd += ['mode', WIFI_MODE]
+        #cmd += ['channel', str(WIFI_CHANNEL)]
 
         if subproc.call(cmd) != 0:
             return False
+
+        time.sleep(0.2)
 
         if util.match_output('Not-Associated', ['iwconfig', self.ifname]):
             #logging.warning('Failed to associate %s to %s', self.ifname, essid)
