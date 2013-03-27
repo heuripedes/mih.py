@@ -398,7 +398,11 @@ class Link80211(Link):
         util.dhcp_release(self.ifname)
         util.dhcp_renew(self.ifname)
 
+        self.routeopts = util.get_defroute_opts(self.ifname)
+
         self.poll()
+
+        self.route_up()
 
         if self.is_ready():
             self.on_link_event(self, 'up')
@@ -406,8 +410,9 @@ class Link80211(Link):
         return self.is_ready()
 
     def is_going_down(self):
-        return (len(self.samples) == WIFI_SAMPLES and
-                util.average(self.samples) < WIFI_THRESHOLD)
+        #return (len(self.samples) == WIFI_SAMPLES and
+        #        util.average(self.samples) < WIFI_THRESHOLD)
+        return util.average(self.samples) < WIFI_THRESHOLD
 
 
 # XXX: based on https://github.com/openshine/ModemManager/blob/master/test/mm-test.py
