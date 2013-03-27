@@ -78,40 +78,43 @@ class LocalMihf(BasicMihf):
     def switch(self, link):
         success = False
 
+        # same link, try to reconnect
         if self.current_link == link:
             success = link.is_ready() or link.up()
+
             if success:
+                link.route_up()
                 logging.info('Connection %s reestablished.', link)
             else:
                 logging.info('Failed to reestablish %s connection.', link)
+
+            return success
+ 
+        # start the handover
+        logging.debug('Switching from %s to %s...', self.current_link, link)
+
+        ho_begin = time.time()
+
+        success = link.is_ready() or link.up()
+
+        if success:
+            if self.current_link:
+                self.current_link.down()
+
+            link.route_up() # replaces the old route.
+
+            self.current_link = link
+
+            if link.is_mobile():
+                self._next_peek = time.time() + self.PEEK_TIME
         else:
-            logging.debug('Switching from %s to %s...', self.current_link, link)
+            link.down()
 
-            ho_begin = time.time()  # handover begin
-            ho_from = self.current_link
-            ho_to = link
+        ho_time = time.time() - ho_begin
+        ho_status = 'successfully' if success else 'unsuccessfully'
 
-            if link.is_ready() or link.up():
-                success = True
-            else:
-                link.down()
-
-            success = link.is_ready()
-
-            if success:
-                if self.current_link and link != self.current_link:
-                    self.current_link.down()
-
-                self.current_link = link
-
-                if link.is_mobile():
-                    self._next_peek = time.time() + self.PEEK_TIME
-
-            ho_time = time.time() - ho_begin
-            ho_status = 'successfully' if success else 'unsuccessfully'
-
-            logging.info('Handover from %s to %s finished %s in %is',
-                ho_from, ho_to, ho_status, ho_time)
+        logging.info('Handover from %s to %s finished %s in %is',
+            self.current_link, link, ho_status, ho_time)
 
         return success
 
