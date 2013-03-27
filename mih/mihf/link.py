@@ -472,18 +472,25 @@ class LinkMobile(Link):
             status = self._modem.GetStatus()
         except dbus.DBusException:
             pass
-        else:
-            if not self.is_ready():
-                self.strenght = 0
-                self.samples.clear()
-            else:
-                self.strenght = status['signal_quality']
-                self.samples.append(self.strenght)
 
-            super(LinkMobile, self).poll()
+        if not self.is_ready():
+            self.strenght = 0
+            self.samples.clear()
+        elif self.is_ready() and status:
+            self.strenght = int(status['signal_quality'])
+            self.samples.append(self.strenght)
+
+        super(LinkMobile, self).poll()
+
 
     def poll_and_notify(self):
-        super(LinkMobile, self).poll_and_notify()
+        oldstate = self.is_ready()
+        try:
+            super(LinkMobile, self).poll_and_notify()
+        except sockios.error, e:
+            if e.errno == errno.ENODEV and oldstate:
+                self.ifname = ''
+                self.on_link_event(self, 'down')
 
     def _detect_iface(self):
         pass
