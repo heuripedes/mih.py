@@ -92,6 +92,11 @@ class Modem(object):
         """Dial in."""
         self._simple.Connect(options)
 
+    def Register(self, network_id=''):
+        """Register the device to the network"""
+        if self.Type == MM_MODEM_TYPE_GSM:
+            self._gsm.Register(network_id)
+
     def Disconnect(self):
         """Disconnect modem."""
         self._modem.Disconnect()

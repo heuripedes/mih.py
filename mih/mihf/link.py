@@ -584,6 +584,8 @@ class LinkMobile(Link):
 
         logging.debug('Connecting modem...')
 
+        self._modem.Register()
+
         opts = {
                 'number':   MOBILE_GSM_NUMBER,
                 'apn':      MOBILE_GSM_APN,
