@@ -34,8 +34,10 @@ def average(samples):
         else:
             total = total + sample
 
-    return total / count
-
+    if count > 0:
+        return total / count
+    else:
+        return 0
 
 def unpickle(pickled):
     """Deserializes `pickled`."""
@@ -181,9 +183,9 @@ def link_compare(a, b):
     if not a.is_wifi() and not a.is_mobile() and (b.is_wifi() or b.is_mobile()):
         return 1
 
-    # wifi > mobile
+    # wifi > mobile unless wifi is going down.
     if a.is_wifi() and b.is_mobile():
-        return 1
+        return a.is_going_down() == False
 
     # if its the same tech, signal strength decides who's better
     if type(a) == type(b):

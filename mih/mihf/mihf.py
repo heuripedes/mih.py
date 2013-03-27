@@ -234,7 +234,8 @@ class LocalMihf(BasicMihf):
         wifi = [link for link in self.links.values() if not link.is_mobile()]
 
         for link in wifi:
-            if not link.up():
+            is_up = link.up()
+            if not is_up or (is_up and util.link_compare(link, self.current_link) < 1):
                 link.down()
 
     def _proccess_messages(self):
