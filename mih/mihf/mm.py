@@ -60,9 +60,16 @@ class Modem(object):
         self.name = name
 
         self._proxy = ModemManager.bus.get_object(MM_DBUS_INTERFACE, name)
-        self._props = dbus.Interface(self._proxy, dbus_interface='org.freedesktop.DBus.Properties')
-        self._modem = dbus.Interface(self._proxy, dbus_interface=MM_DBUS_INTERFACE_MODEM)
-        self._simple = dbus.Interface(self._proxy, dbus_interface=MM_DBUS_INTERFACE_MODEM_SIMPLE)
+        self._props = dbus.Interface(self._proxy,
+                dbus_interface='org.freedesktop.DBus.Properties')
+        self._modem = dbus.Interface(self._proxy,
+                dbus_interface=MM_DBUS_INTERFACE_MODEM)
+        self._simple = dbus.Interface(self._proxy,
+                dbus_interface=MM_DBUS_INTERFACE_MODEM_SIMPLE)
+
+        if self.Type == MM_MODEM_TYPE_GSM:
+            self._gsm = dbus.Interface(self._proxy,
+                    dbus_interface=MM_DBUS_INTERFACE_MODEM_GSM_NETWORK)
 
     def __getattr__(self, name):
         return self._props.Get(MM_DBUS_INTERFACE_MODEM, name)
