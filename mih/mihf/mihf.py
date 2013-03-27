@@ -306,6 +306,10 @@ class ClientMihf(LocalMihf):
 
     def report(self):
 
+        if not self._peers:
+            logging.debug('There is no one to ask a report from.')
+            return
+
         # Broadcast to the known servers
         for peer in self._peers:
             links = self._peers[peer].links.keys()

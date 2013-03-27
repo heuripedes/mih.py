@@ -36,7 +36,8 @@ MOBILE_GSM_APN = 'gprs.oi.com.br'
 #MOBILE_GSM_USER = 'oi'
 #MOBILE_GSM_PASS = 'oi'
 MOBILE_GSM_USER = ''
-MOBILE_GSM_PASS = 'oioioi'
+#MOBILE_GSM_PASS = 'oioioi'
+MOBILE_GSM_PASS = ''
 
 def filter_invalid_ifnames():
     ifnames = sockios.get_iflist()
