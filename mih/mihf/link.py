@@ -143,8 +143,7 @@ class Link(object):
         except sockios.error:
             self.ipaddr = ''
 
-        if self.ipaddr == '127.0.0.1':
-            self.ipaddr = ''
+        assert self.ipaddr != '127.0.0.1'
 
     def poll(self):
         """Refreshes the link object's state."""
