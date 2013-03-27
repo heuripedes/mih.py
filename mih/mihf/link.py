@@ -96,6 +96,7 @@ class Link(object):
 
         self.ifname = None
         self.ipaddr = ''
+        self.routeopts = []
         self.state = None  # force link_up on first poll()
         self.remote = False
         self.ready = False
@@ -159,6 +160,9 @@ class Link(object):
         else:
             self.ipaddr = ''
 
+        if self.ifname and not self.routeopts:
+            self.routeopts = util.get_defroute_opts(self.ifname)
+
     def poll_and_notify(self):
         """Refreshes the internal state and notifies users of link events."""
         assert not self.remote
@@ -193,18 +197,33 @@ class Link(object):
 
                 subproc.call(['ip', 'addr', 'flush', 'dev', self.ifname])
 
+                self.route_down()
+
                 sockios.set_down(self.ifname)
 
                 #if not self.state:
                 #    self.on_link_event(self, 'down')
 
             elif self.ifname:
+                self.route_down()
                 sockios.set_down(self.ifname)
 
             self.poll()
             self.ipaddr = ''
 
         return not self.state
+
+    def route_up(self):
+        """Activates the interfaces's default route"""
+        if self.routeopts and self.ifname:
+            logging.debug('Activating %s default route', self.ifname)
+            subproc.call(['ip', 'route', 'add'] + self.routeopts)
+
+    def route_down(self):
+        """Deactivates the interfaces's default route"""
+        if self.ifname:
+            logging.debug('Deactivating %s default route', self.ifname)
+            subproc.call(['ip', 'route', 'del', 'default', 'dev', self.ifname])
 
     def is_ready(self):
         """Checks whether the link is ready."""
@@ -279,7 +298,11 @@ class Link80203(Link):
         util.dhcp_release(self.ifname)
         util.dhcp_renew(self.ifname)
 
+        self.routeopts = util.get_defroute_opts(self.ifname)
+
         self.poll()
+
+        self.route_up()
 
         #if self.is_ready():
         #    self.on_link_event(self, 'up')
@@ -585,6 +608,11 @@ class LinkMobile(Link):
 
                 time.sleep(0.1)
         return True
+ 
+    def route_up(self):
+        if self.is_ready():
+            print 'activating', self.ifname, 'default route'
+            subproc.call(['ip', 'route', 'add', 'default', 'dev', self.ifname])
 
     def up(self):
         assert not self.remote
@@ -605,6 +633,8 @@ class LinkMobile(Link):
 
         if not super(LinkMobile, self).up():
             return False
+ 
+        self.route_up()
 
         return True
 

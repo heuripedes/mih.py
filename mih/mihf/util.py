@@ -77,11 +77,20 @@ def call_timeout(args, **kwargs):
 
     return None
 
+def get_defroute_opts(ifname):
+
+    args = ['ip', 'route', 'show', 'dev', ifname]
+    matches = match_output('^default.*', args)
+
+    if matches and matches[0].strip():
+        return shlex.split(matches[0].strip())
+ 
+    return ''
 
 def dhcp_release(ifname):
     """Obtain a DHCP lease for `ifname`."""
 
-    logging.info('Releasing %s...', ifname)
+    logging.debug('Releasing %s...', ifname)
 
     try:
         subprocess.call(['dhcpcd', '--release', ifname])
@@ -101,7 +110,7 @@ def dhcp_release(ifname):
 def dhcp_renew(ifname):
     """Renews `ifname`'s DHCP lease."""
 
-    logging.info('Renewing %s DHCP lease...', ifname)
+    logging.debug('Renewing %s DHCP lease...', ifname)
 
     try:
         subprocess.call(['dhcpcd', '--rebind', ifname])
