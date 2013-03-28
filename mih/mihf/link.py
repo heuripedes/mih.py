@@ -502,19 +502,15 @@ class LinkMobile(Link):
         pass
 
     def _enable(self, enable):
-        if enable:
-            logging.debug('Enabling modem...')
-        else:
-            logging.debug('Disabling modem...')
+        logstr = 'Enabling' if enable else 'Disabling'
+        logging.debug('%s modem...', logstr)
 
         try:
             self._modem.Enable(enable)
             return True
         except dbus.DBusException, e:
-            if enable:
-                logging.debug('Failed to enable the modem: %s', str(e))
-            else:
-                logging.debug('Failed to disable the modem: %s', str(e))
+            logstr = 'enable' if enable else 'disable'
+            logging.debug('Failed to %s the modem: %s', logstr, str(e))
 
             return False
 
@@ -542,7 +538,11 @@ class LinkMobile(Link):
             self._pppd = subproc.Popen(args, cwd='/', env={},
                     stdout=subproc.PIPE, stderr=subproc.PIPE)
         except IOError, e:
-            logging.debug('Failed to run pppd: %s', str(e))
+            if e.errno == errno.ENOENT:
+                logging.critical('pppd executable not found.')
+            else:
+                logging.warning('Failed to run pppd: %s', str(e))
+
             return False
 
         # non-blocking stdout
@@ -564,6 +564,8 @@ class LinkMobile(Link):
 
             if not line:
                 continue
+
+            logging.debug('PPPD: %s', line)
 
             if not self.ifname:
                 matches = re.findall(r'Using\s+interface\s+([a-z0-9]+)', line)
@@ -626,7 +628,7 @@ class LinkMobile(Link):
  
     def route_up(self):
         if self.is_ready():
-            print 'activating', self.ifname, 'default route'
+            logging.debug('Activating %s default route', self.ifname)
             subproc.call(['ip', 'route', 'add', 'default', 'dev', self.ifname])
 
     def up(self):

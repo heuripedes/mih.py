@@ -67,7 +67,7 @@ class MessageManager(object):
                     continue
 
             if sent != len(data):
-                logging.warning('Failed to send message to %s: too many timeouts', msg.daddr)
+                logging.warning('Failed to send message to %s: too many timeouts.', msg.daddr)
 
             util.bind_sock_to_device(sock, link or '')
 

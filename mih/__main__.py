@@ -77,7 +77,7 @@ class MihClient:
                 func.discover(link)
                 pass
             else:
-                logging.info('Failed to switch to to %s.', link.ifname)
+                logging.warning('Failed to switch to to %s.', link.ifname)
 
     @staticmethod
     def link_down(func, link):
@@ -168,8 +168,8 @@ def main():
         help='run as server')
 
     parser.add_argument('-L', '--loglevel',
-        action='store', default='DEBUG',
-        help='set the logging level')
+        action='store', default='INFO',
+        help='set the logging level (WARNING|INFO|DEBUG)')
 
     args = parser.parse_args(argv)
 
@@ -191,3 +191,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

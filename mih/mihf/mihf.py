@@ -84,16 +84,18 @@ class LocalMihf(BasicMihf):
 
             if success:
                 link.route_up()
-                logging.info('Connection %s reestablished.', link)
+                logging.info('Link %s reestablished.', link)
             else:
-                logging.info('Failed to reestablish %s connection.', link)
+                logging.info('Failed to reestablish %s link.', link)
 
             return success
  
         # start the handover
-        logging.debug('Switching from %s to %s...', self.current_link, link)
 
+        ho_origin = self.current_link
         ho_begin = time.time()
+
+        logging.info('Handover from %s to %s started.', ho_origin, link)
 
         success = link.is_ready() or link.up()
 
@@ -114,7 +116,7 @@ class LocalMihf(BasicMihf):
         ho_status = 'successfully' if success else 'unsuccessfully'
 
         logging.info('Handover from %s to %s finished %s in %is',
-            self.current_link, link, ho_status, ho_time)
+            ho_origin, link, ho_status, ho_time)
 
         return success
 
@@ -188,7 +190,7 @@ class LocalMihf(BasicMihf):
             del self.links[name]
 
         for name in new:
-            logging.debug('Found link %s.', name)
+            logging.info('Found link %s.', name)
             link = make_link(ifname=name)
             link.on_link_event = self._handle_link_event
             self.links[name] = link
@@ -283,10 +285,11 @@ class ClientMihf(LocalMihf):
         self.last_report = None
 
     def run(self):
-        logging.info('Starting client MIHF %s', self.name)
 
         self._make_socket()
         self._scan_links()
+
+        logging.info('Client MIHF %s started.', self.name)
 
         while True:
             self._msgmngr.fill_queue(self._sock)
@@ -338,7 +341,7 @@ class ClientMihf(LocalMihf):
             logging.info('Received report from %s.', msg.smihf)
 
             if self.last_report:
-                logging.info('Ignoring report from %s.', msg.smihf)
+                logging.debug('Ignoring report from %s.', msg.smihf)
                 return
 
             peer = self._peers[msg.smihf]
@@ -363,10 +366,11 @@ class ServerMihf(LocalMihf):
         logging.warning('Attempted to run peer discovery.')
 
     def run(self):
-        logging.info('Starting server MIHF %s', self.name)
 
         self._make_socket(bind=True)
         self._scan_links()
+
+        logging.info('Server MIHF %s started.', self.name)
 
         while True:
             self._msgmngr.fill_queue(self._sock)
@@ -397,3 +401,4 @@ class ServerMihf(LocalMihf):
         if msg.kind == 'mih_report.request':
             self._send(msg.smihf, 'mih_report.response',
                     self._export_links(), parent=msg.id, daddr=srcaddr)
+

@@ -104,7 +104,7 @@ def dhcp_release(ifname):
             call_timeout(['dhclient', '-1', '-r', ifname], timeout=5)
         except OSError, err:
             if err.errno == errno.ENOENT:
-                logging.error('Neither dhcpcd nor dhclient were found.')
+                logging.critical('Neither dhcpcd nor dhclient were found.')
             else:
                 raise err
 
@@ -124,7 +124,7 @@ def dhcp_renew(ifname):
             call_timeout(['dhclient', '-1', ifname], timeout=5)
         except OSError, err:
             if err.errno == errno.ENOENT:
-                logging.error('Neither dhcpcd nor dhclient were found.')
+                logging.critical('Neither dhcpcd nor dhclient were found.')
             else:
                 raise err
 
@@ -193,3 +193,4 @@ def link_compare(a, b):
         return delta / abs(delta) if delta != 0 else 0
 
     return 0
+
