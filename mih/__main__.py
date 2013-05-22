@@ -149,7 +149,8 @@ class MihClient:
 
             func.last_report = None
         else:
-            func.report()
+            if not func.report():
+                switch_to_better(func, links)
 
 
 def main():

@@ -311,12 +311,14 @@ class ClientMihf(LocalMihf):
 
         if not self._peers:
             logging.debug('There is no one to ask a report from.')
-            return
+            return False
 
         # Broadcast to the known servers
         for peer in self._peers:
             links = self._peers[peer].links.keys()
             self._send(peer, 'mih_report.request', payload=links)
+
+        return True
 
     def _handle_message(self, srcaddr, msg):
 
