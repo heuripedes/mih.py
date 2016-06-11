@@ -1,0 +1,85 @@
+vim: spell spl=pt ts=4 sw=4 tw=78 sts=4 et ai fo+=tcqrona wrap :
+
+Notas de implementação
+======================
+
+MIHF:
+
+	- Utilizar TCP
+
+	> Sem suporte a descoberta de outras mihfs?
+	
+Management Service:
+
+
+MICS:
+
+	- Comandos para configuração de QOS Threshold não serão implementados.
+      
+		> Os valores podem ser *hardcoded*, já que o ambiente vai ser 
+		> controlado.
+
+MIIS:
+
+    - Se a implementação utilizar C: 
+		- Sem suporte a RDF. TLV é mais compacto e leve.
+	- Se a implementação utilizar Python:
+		- Suporte a RDF OU TLV
+		 
+	- Pró RDF
+		* Extensível
+		* Portável
+		* Suporte a queries complexas
+		* Muitas bibliotecas
+	- Contra RDF
+		* Suporte a extensão não é necessário
+		* Portabilidade não é um pre requesito
+		* Não se sabe se será necessário o uso de queries complexas
+		* Sobrecarga
+	
+	- Pró TLV
+		* Leve
+	- Contra RDF
+		* Não tão portavel como rdf (utiliza notação binaria)
+		* Pouca/nenhuma flexibilidade
+
+
+Tecnologias de rede suportadas:
+
+	- Somente sem fio, preferencialmente 802.11 e 3g
+
+Outros detalhes:
+
+	- Tentar implementar sem fazer adições aos elementos documentados no 
+	  padrão.
+	
+	- (RT)netlink ou ioctl() ?
+
+		> *netlink é exclusiva do linux
+
+		> ioctl() é padrão entre os unixes porém bem baixo nivel.
+
+		> 802.11: Segundo [3], algumas informações dinamicas estão disponiveis 
+		> em /proc/net/wireless no linux
+
+		> 3g: ainda segundo [3], informações dinâmicas sobre conexões 3g podem 
+		> ser adquiridas através de comandos AT enviados ao modem.
+	  
+	> Em [4], o handover é processado exclusivamente pelos pontos de acesso 
+	> (TVN, target visited networks), bastando ao MN somente informar-lhes os 
+	> requisitos.  O esquema leva em consideração a largura de banda e o custo 
+	> em dineiro (DVHD, distributed vertical handover decision).
+
+---
+IEEE 802.21 permite que tecnologias implementem uma única extensão para 
+suportar handover com todas as outras tecnologias de acesso.[1]
+
+Usar TLV em vez de RDF pode ter efeito contrário. Para a realização de queries 
+complexas, é necessário um numero maior de mensagens. [2]
+
+[1]: mag-ieee80221-mih-features-aplicability-realization.pdf, p.2
+[2]: mag-ieee80221-mih-features-aplicability-realization.pdf, p.4
+[3]: towards-a-linux-ieee80221-implementation.pdf, p.4
+[4]: distributed-handoff-scheme-using-mihf-for-4g-wireless.pdf, p.2
+
+

@@ -1,0 +1,183 @@
+% vim: spell spelllang=pt formatoptions+=tcaw textwidth=78 nonu foldcolumn=0
+
+\documentclass[12pt]{article}
+\usepackage[brazil]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{sbc-template}
+\usepackage{graphicx,url}
+
+     
+\sloppy
+
+\title{Transições Interrede Independentes do Meio Físico de Acesso}
+
+\author{Higor Eurípedes P. F. A.\inst{1}, Cláudio de C. Monteiro\inst{1}}
+
+\address{Instituto Federal de Educação, Ciência e Tecnologia do Tocantins (IFTO)\\
+  77.021-090 -- Palmas -- TO -- Brazil
+  \email{heuripedes@gmail.com, ccm@ifto.edu.br}
+}
+
+\date{Novembro, 2011}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+
+This document describes, superficially, the features of the IEEE 802.21 
+standard for \textit{Media Independent Handover}.
+
+\end{abstract}
+     
+\begin{resumo}
+
+Este documento descreve, superficialmente, as características do padrão
+IEEE 802.21 para transições interrede independentes do meio físico de acesso.
+
+\end{resumo}
+
+
+\section{Introdução}
+
+A crescente procura por mobilidade por parte da população, impulsionou a venda 
+de dispositivos móveis assim como o celular e os computadores portáteis. Cada 
+vez mais exigentes, os usuários demandam dispositivos que os permitam proceder 
+com suas atividades onde e como lhe convir.
+
+Para atender à vontade do mercado e da população em geral, padrões como o
+IEEE 802.11\cite{ieee:2007:80211} e o 802.16\cite{ieee:2009:80216} foram 
+desenvolvidos.  Entretanto, a evolução dos dispositivos móveis introduziu o 
+conceito de multiacesso, uma característica que incrementou a experiência dos 
+usuários, mas explicitou que as tecnologias de conectividade possuíam uma 
+deficiência: a transição de uma rede para outra era incômoda e causava quedas 
+de disponibilidade de certos serviços. Segundo \cite{piri:2009}, isto 
+acontecia, parcialmente, por falta de padronização dos mecanismos de transição 
+em uso.  Como resposta a estas deficiências, deu-se inicio ao desenvolvimento 
+de um padrão aberto para a transição interrede independente do meio físico de 
+acesso: o padrão IEEE 802.21 \cite{ieee:2008:80221}.
+
+\section{O padrão IEEE 802.21}
+
+O padrão IEEE 802.21 documenta mecanismos que possibilitam a transição entre 
+redes heterogêneas.  Em \cite{idigital:2009}, o padrão é caracterizado como 
+uma abstração da camada de enlace, oferecendo às camadas superiores um acesso 
+comum independente da tecnologia de enlace empregada.
+
+É mencionado em \cite{ieee:2008:80221}, que o objetivo principal do padrão é 
+facilitar o processo de transição entre redes IEEE 802 - tornando-o 
+independente do meio de transmissão utilizado - e permitir a conectividade 
+ininterrupta dos dispositivos garantindo uma experiência de continuidade de 
+conexão para o usuário.  Embora tenha foco na transição entre redes IEEE 802 
+heterogêneas, o padrão também poderá ter seus mecanismos utilizados para 
+efetuar transições homogêneas ou entre redes IEEE 802 e redes não-IEEE 802.
+
+Segundo \cite{piri:2009}, o elemento principal do padrão é a \textit{Media 
+Independent Handover Function} (MIHF). Esta função é uma entidade lógica, 
+localizada entre as camadas 2 e 3, que tem a tarefa de assistir transições dos 
+\textit{Mobile Nodes} (MN), dispositivos com capacidade para acessar várias 
+redes simultâneamente. Em \cite{kimhun:2010}, é afirmado que a MIHF oferece 
+uma abstração das camadas inferiores sob a forma de interface unificada, 
+visando assistir as aplicações das camadas superiores durante o processo de 
+\textit{handover}. Esta interface é composta de três serviços disponibilizados 
+aos nós da rede:
+
+\begin{enumerate}
+
+	\item \textit{Media Independent Event Service} (MIES) -- fornece 
+	classificação, filtragem e notificação de eventos correspondentes à 
+	alterações das propriedades das camadas inferiores. O serviço também é 
+	capaz notificar as camadas superiores de eventos que irão ocorrer.
+
+	\item \textit{Media Independent Command Service} (MICS) -- permite que 
+	camadas superiores sejam capazes de reconfigurar ou selecionar 
+	conexões por meio de comandos de transição.
+
+	\item \textit{Media Independente Information Service} (MIIS) --  
+	fornece detalhes sobre serviços disponíveis na rede atual e nas 
+	vizinhas.
+	
+\end{enumerate}
+
+A transmissão e recepção de comandos, eventos e informações entre os serviços 
+e os clientes MIH, são feitos utilizando o protocolo \textit{Media Independent 
+Handover Protocol} (MIHP). Segundo \cite{ieee:2008:80221}, este protocolo 
+permite a troca de mensagens MIH entre as MIHFs das entidades ao nível das 
+camadas dois e três. A comunicação pode ser feita de forma síncrona ou 
+assíncrona, utilizando pares de requisição e resposta.
+
+O MIHP abrange tecnologias IEEE como IEEE 802.3 e IEEE 802.16, mas também 
+tecnologias não-IEEE como \textit{3GPP} e \textit{3GPP2}. O suporte a estas 
+redes é oferecido por modelos de referência de implementação, documentados no 
+próprio padrão de MIH.
+
+\subsection{As transições}
+
+Como apresentado anteriormente, o padrão 802.21 possui foco nas transições 
+verticais, isto é, transições entre redes heterogêneas. Estas transições são 
+realizadas de modo a garantir um uso otimizado dos recursos da rede e dos 
+dispositivos, além de promover a continuidade dos serviços oferecidos aos 
+usuários.
+
+Transições que obedecem o padrão IEEE 802.21 podem ser motivadas por eventos 
+propagados pelo MIES ou por comandos enviados ao MICS. O MIIS fica responsável 
+por disponibilizar às camadas superiores informações suficientes sobre a 
+situação da rede alvo, de modo a permitir a escolha que apresente menor custo.  
+Detalhes específicos sobre os procedimentos da operação ficam sob a 
+responsabilidade do fornecedor, segundo \cite{stein:2006}.
+
+Para exemplificar o trabalho dos serviços durante um \textit{handover}, 
+pode-se considerar a seguinte situação adaptada de \cite{kimhun:2010}: 
+
+\begin{enumerate}
+
+	\item Um determinado local é coberto por duas redes, uma WiFi (rede A) 
+	e outra WiMAX (rede B), e, no momento, existem alguns dispositivos 
+	clientes (C) conectados à rede A;
+
+	\item O administrador da rede A decide efetuar a manutenção no único 
+	\textit{access point} (\textit{Point of Attachment} ou PoA) da rede e, 
+	utilizando um programa de gerência com suporte a MIH e MICS, envia à 
+	MIHF de seus clientes uma \textit{MIH\_Net\_HO\_Candidate\_Query 
+	request} para iniciar a transição e sugerir pontos de acesso 
+	alternativos. Os clientes respondem com uma 
+	\textit{MIH\_Net\_HO\_Candidate\_Query response} informando os pontos 
+	de acesso  e conexões preferidas;
+
+	\item O PoA da rede A solicita informações adicionais aos MIIS dos 
+	PoAs sugeridos pelo cliente por meio de uma 
+	\textit{MIH\_N2N\_HO\_Query\_Resource request}, e os mesmos respondem 
+	com uma \textit{MIH\_N2N\_HO\_Query\_Resource response}. Com esta 
+	informação o PoA atual determina qual PoA receberá os clientes, no 
+	caso, o PoA da rede B.
+
+	\item Uma \textit{MIH\_Net\_HO\_Commit request} contendo o PoA de destino 
+	é enviada aos clientes para que efetuem a transição. O PoA atual 
+	notifica os PoAs vizinhos que a transição irá ocorrer utilizando uma 
+	\textit{MIH\_N2N\_HO\_Commit request} que informa qual cliente e quais 
+	PoAs estão envolvidos. Os clientes e o PoA alvo ao concluirem a 
+	operação de \textit{handover} respondem ao PoA inicial com uma 
+	\textit{MIH\_Net\_HO\_Commit response} e \textit{MIH\_N2N\_HO\_Commit 
+	response}, respectivamente.
+
+	\item Adicionalmente, o PoA alvo e o cliente podem enviar mensagens 
+	\textit{MIH\_N2N\_HO\_Complete} ou \textit{MIH\_Net\_HO\_Complete} ao PoA 
+	inicial para confirmar a conclusão da transição.
+
+\end{enumerate}
+
+A situação mais comum, vivida em ambientes que implementam MIH, é a que ocorre 
+sem intervenção, por meio de eventos propagados pelo MIES dos MN. Tomando o 
+exemplo anterior como ponto de partida, pode-se substituir a intervenção do 
+administrador de redes pela degradação de sinal, causada pela movimentação do 
+dispositivo. Neste momento, o MIES do cliente dispara o evento 
+\textit{MIH\_Link\_Going\_Down} para que o PoA associado solicite informações 
+do estado dos PoAs adjacentes.
+
+
+\bibliographystyle{sbc}
+\bibliography{minuta}
+
+\end{document}
